@@ -187,7 +187,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "..\Release\$(ProjectName).lib" "..\Share\Hook\" /Y</Command>
+      <Command>xcopy "..\Release\$(ProjectName).lib" ".." /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
