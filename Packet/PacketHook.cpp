@@ -397,17 +397,18 @@ ULONG_PTR GetCClientSocket() {
 	return *(ULONG_PTR *)uCClientSocket;
 }
 
-// FF 74 24 04 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? C3
-// 8B 44 24 04 8B 0D ?? ?? ?? ?? 50 E8 ?? ?? ?? ?? C3, v188
+// v92, v188: 8B 44 24 04 8B 0D ?? ?? ?? ?? 50 E8 ?? ?? ?? ?? C3
+// Pattern has PUSH (50) before CALL, so CALL is at offset 0x0B
 bool ScannerEnterSendPacket(ULONG_PTR uAddress) {
-	DEBUGLOGHEX(L"ScannerEnterSendPacket: Checking address", uAddress);
+	DEBUGLOGHEX(L"ScannerEnterSendPacket (v92/v188): Checking address", uAddress);
 
 	if (!uSendPacket) {
 		DEBUGLOG(L"ScannerEnterSendPacket: uSendPacket is NULL, returning false");
 		return false;
 	}
 
-	ULONG_PTR uCall = uAddress + 0x0A;
+	// v92/v188 pattern: CALL instruction starts at offset 0x0B (not 0x0A)
+	ULONG_PTR uCall = uAddress + 0x0B;
 	ULONG_PTR uFunction = uCall + 0x05 + *(signed long int *)(uCall + 0x01);
 
 	DEBUGLOGHEX(L"ScannerEnterSendPacket: Expected SendPacket", uSendPacket);
@@ -419,7 +420,7 @@ bool ScannerEnterSendPacket(ULONG_PTR uAddress) {
 	}
 
 	uEnterSendPacket = uAddress;
-	uEnterSendPacket_ret = uEnterSendPacket + 0x0F;
+	uEnterSendPacket_ret = uEnterSendPacket + 0x10; // Pattern length is 17 bytes (0x11), return is at 0x10
 	uCClientSocket = *(ULONG_PTR *)(uAddress + 0x06);
 
 	DEBUGLOGHEX(L"ScannerEnterSendPacket: SUCCESS! uEnterSendPacket", uEnterSendPacket);
@@ -429,32 +430,35 @@ bool ScannerEnterSendPacket(ULONG_PTR uAddress) {
 	return true;
 }
 
-bool ScannerEnterSendPacket_188(ULONG_PTR uAddress) {
-	DEBUGLOGHEX(L"ScannerEnterSendPacket_188: Checking address", uAddress);
+// v164-v186: FF 74 24 04 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? C3
+// Pattern has no PUSH, CALL is at offset 0x0A
+bool ScannerEnterSendPacket_164(ULONG_PTR uAddress) {
+	DEBUGLOGHEX(L"ScannerEnterSendPacket_164 (v164-v186): Checking address", uAddress);
 
 	if (!uSendPacket) {
-		DEBUGLOG(L"ScannerEnterSendPacket_188: uSendPacket is NULL, returning false");
+		DEBUGLOG(L"ScannerEnterSendPacket_164: uSendPacket is NULL, returning false");
 		return false;
 	}
 
-	ULONG_PTR uCall = uAddress + 0x0B;
+	// v164-v186 pattern: CALL instruction starts at offset 0x0A
+	ULONG_PTR uCall = uAddress + 0x0A;
 	ULONG_PTR uFunction = uCall + 0x05 + *(signed long int *)(uCall + 0x01);
 
-	DEBUGLOGHEX(L"ScannerEnterSendPacket_188: Expected SendPacket", uSendPacket);
-	DEBUGLOGHEX(L"ScannerEnterSendPacket_188: Found function", uFunction);
+	DEBUGLOGHEX(L"ScannerEnterSendPacket_164: Expected SendPacket", uSendPacket);
+	DEBUGLOGHEX(L"ScannerEnterSendPacket_164: Found function", uFunction);
 
 	if (uFunction != uSendPacket) {
-		DEBUGLOG(L"ScannerEnterSendPacket_188: Function mismatch, returning false");
+		DEBUGLOG(L"ScannerEnterSendPacket_164: Function mismatch, returning false");
 		return false;
 	}
 
 	uEnterSendPacket = uAddress;
-	uEnterSendPacket_ret = uEnterSendPacket + 0x10;
+	uEnterSendPacket_ret = uEnterSendPacket + 0x0F; // Pattern length is 15 bytes (0x0F)
 	uCClientSocket = *(ULONG_PTR *)(uAddress + 0x06);
 
-	DEBUGLOGHEX(L"ScannerEnterSendPacket_188: SUCCESS! uEnterSendPacket", uEnterSendPacket);
-	DEBUGLOGHEX(L"ScannerEnterSendPacket_188: uEnterSendPacket_ret", uEnterSendPacket_ret);
-	DEBUGLOGHEX(L"ScannerEnterSendPacket_188: uCClientSocket", uCClientSocket);
+	DEBUGLOGHEX(L"ScannerEnterSendPacket_164: SUCCESS! uEnterSendPacket", uEnterSendPacket);
+	DEBUGLOGHEX(L"ScannerEnterSendPacket_164: uEnterSendPacket_ret", uEnterSendPacket_ret);
+	DEBUGLOGHEX(L"ScannerEnterSendPacket_164: uCClientSocket", uCClientSocket);
 
 	return true;
 }
@@ -500,9 +504,15 @@ bool PacketHook_Thread(HookSettings &hs) {
 }
 #else
 	if (uSendPacket) {
+		// Pattern 0: v92
 		uEnterSendPacket = r.Scan(AOB_EnterSendPacket[0], ScannerEnterSendPacket);
 		if (!uEnterSendPacket) {
-			uEnterSendPacket = r.Scan(AOB_EnterSendPacket[1], ScannerEnterSendPacket_188);
+			// Pattern 1: v164-v186
+			uEnterSendPacket = r.Scan(AOB_EnterSendPacket[1], ScannerEnterSendPacket_164);
+		}
+		if (!uEnterSendPacket) {
+			// Pattern 2: v188
+			uEnterSendPacket = r.Scan(AOB_EnterSendPacket[2], ScannerEnterSendPacket);
 		}
 		if (uEnterSendPacket) {
 			SHookFunction(EnterSendPacket, uEnterSendPacket);
@@ -603,12 +613,22 @@ bool PacketHook_Conf(HookSettings &hs) {
 	}
 #else
 	if (_SendPacket) {
-		DEBUGLOG(L"PacketHook_Conf: Scanning for EnterSendPacket (pattern 0)...");
+		// Pattern 0: v92 (8B 44 24 04 8B 0D A0 EF C2 00 50 E8...)
+		DEBUGLOG(L"PacketHook_Conf: Scanning for EnterSendPacket (pattern 0: v92)...");
 		uEnterSendPacket = r.Scan(AOB_EnterSendPacket[0], ScannerEnterSendPacket);
+
 		if (!uEnterSendPacket) {
-			DEBUGLOG(L"PacketHook_Conf: Pattern 0 failed, trying pattern 1 (v188)...");
-			uEnterSendPacket = r.Scan(AOB_EnterSendPacket[1], ScannerEnterSendPacket_188);
+			// Pattern 1: v164-v186 (FF 74 24 04 8B 0D...)
+			DEBUGLOG(L"PacketHook_Conf: Pattern 0 failed, trying pattern 1 (v164-v186)...");
+			uEnterSendPacket = r.Scan(AOB_EnterSendPacket[1], ScannerEnterSendPacket_164);
 		}
+
+		if (!uEnterSendPacket) {
+			// Pattern 2: v188 (8B 44 24 04 8B 0D ?? ?? ?? ?? 50 E8...)
+			DEBUGLOG(L"PacketHook_Conf: Pattern 1 failed, trying pattern 2 (v188)...");
+			uEnterSendPacket = r.Scan(AOB_EnterSendPacket[2], ScannerEnterSendPacket);
+		}
+
 		if (uEnterSendPacket) {
 			DEBUGLOG(L"PacketHook_Conf: EnterSendPacket found! Installing hook...");
 			SHookFunction(EnterSendPacket, uEnterSendPacket);
