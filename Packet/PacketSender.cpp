@@ -59,9 +59,14 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 		memset(&p, 0, sizeof(p));
 		COutPacket_Hook(&p, 0, wHeader);
 
+		DEBUGLOG(L"PacketInjector: COutPacket_Hook completed");
+
 		// Set up the packet data
 		p.packet = &pcm->Binary.packet[0];
 		p.encoded = pcm->Binary.length;
+
+		DEBUGLOGHEX(L"PacketInjector: Packet pointer", (ULONG_PTR)p.packet);
+		DEBUGLOGHEX(L"PacketInjector: Packet encoded length", p.encoded);
 
 		DEBUGLOG(L"PacketInjector: Calling _EnterSendPacket_Original...");
 		_EnterSendPacket_Original(&p);

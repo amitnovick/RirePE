@@ -137,6 +137,14 @@ void __fastcall  COutPacket_Hook(OutPacket *op, void *edx, WORD w) {
 	if (!_COutPacket && _COutPacket_2) {
 		return _COutPacket_2(op, w, 0);
 	}
+	if (!_COutPacket && !_COutPacket_2 && _COutPacket_3) {
+		return _COutPacket_3(op, w, 0, 0);
+	}
+	// If no COutPacket function is available, return without calling anything
+	// This allows packet sending to work even without COutPacket hooked
+	if (!_COutPacket) {
+		return;
+	}
 #endif
 	return _COutPacket(op, w);
 }

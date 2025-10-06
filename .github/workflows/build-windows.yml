@@ -46,15 +46,15 @@ jobs:
         Write-Host "Build outputs:"
         Get-ChildItem -Recurse -Include *.exe,*.dll | Where-Object { $_.Directory -like "*Release*" }
 
-    - name: Upload RirePE.exe artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: RirePE-32bit
-        path: |
-          **/Release/RirePE.exe
-          **/Win32/Release/RirePE.exe
-        if-no-files-found: error
-
+#    - name: Upload RirePE.exe artifact
+#      uses: actions/upload-artifact@v4
+#      with:
+#        name: RirePE-32bit
+#        path: |
+#          **/Release/RirePE.exe
+#          **/Win32/Release/RirePE.exe
+#        if-no-files-found: error
+#
     - name: Upload Packet.dll artifact
       uses: actions/upload-artifact@v4
       with:
