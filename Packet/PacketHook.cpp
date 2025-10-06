@@ -3,6 +3,7 @@
 #include"../Packet/PacketHook.h"
 #include"../Packet/AobList.h"
 #include"../Packet/PacketLogging.h"
+#include"../Share/Simple/DebugLog.h"
 #include<vector>
 #include<intrin.h>
 #pragma intrinsic(_ReturnAddress)
@@ -399,36 +400,62 @@ ULONG_PTR GetCClientSocket() {
 // FF 74 24 04 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? C3
 // 8B 44 24 04 8B 0D ?? ?? ?? ?? 50 E8 ?? ?? ?? ?? C3, v188
 bool ScannerEnterSendPacket(ULONG_PTR uAddress) {
+	DEBUGLOGHEX(L"ScannerEnterSendPacket: Checking address", uAddress);
+
 	if (!uSendPacket) {
+		DEBUGLOG(L"ScannerEnterSendPacket: uSendPacket is NULL, returning false");
 		return false;
 	}
 
 	ULONG_PTR uCall = uAddress + 0x0A;
 	ULONG_PTR uFunction = uCall + 0x05 + *(signed long int *)(uCall + 0x01);
+
+	DEBUGLOGHEX(L"ScannerEnterSendPacket: Expected SendPacket", uSendPacket);
+	DEBUGLOGHEX(L"ScannerEnterSendPacket: Found function", uFunction);
+
 	if (uFunction != uSendPacket) {
+		DEBUGLOG(L"ScannerEnterSendPacket: Function mismatch, returning false");
 		return false;
 	}
 
 	uEnterSendPacket = uAddress;
 	uEnterSendPacket_ret = uEnterSendPacket + 0x0F;
 	uCClientSocket = *(ULONG_PTR *)(uAddress + 0x06);
+
+	DEBUGLOGHEX(L"ScannerEnterSendPacket: SUCCESS! uEnterSendPacket", uEnterSendPacket);
+	DEBUGLOGHEX(L"ScannerEnterSendPacket: uEnterSendPacket_ret", uEnterSendPacket_ret);
+	DEBUGLOGHEX(L"ScannerEnterSendPacket: uCClientSocket", uCClientSocket);
+
 	return true;
 }
 
 bool ScannerEnterSendPacket_188(ULONG_PTR uAddress) {
+	DEBUGLOGHEX(L"ScannerEnterSendPacket_188: Checking address", uAddress);
+
 	if (!uSendPacket) {
+		DEBUGLOG(L"ScannerEnterSendPacket_188: uSendPacket is NULL, returning false");
 		return false;
 	}
 
 	ULONG_PTR uCall = uAddress + 0x0B;
 	ULONG_PTR uFunction = uCall + 0x05 + *(signed long int *)(uCall + 0x01);
+
+	DEBUGLOGHEX(L"ScannerEnterSendPacket_188: Expected SendPacket", uSendPacket);
+	DEBUGLOGHEX(L"ScannerEnterSendPacket_188: Found function", uFunction);
+
 	if (uFunction != uSendPacket) {
+		DEBUGLOG(L"ScannerEnterSendPacket_188: Function mismatch, returning false");
 		return false;
 	}
 
 	uEnterSendPacket = uAddress;
 	uEnterSendPacket_ret = uEnterSendPacket + 0x10;
 	uCClientSocket = *(ULONG_PTR *)(uAddress + 0x06);
+
+	DEBUGLOGHEX(L"ScannerEnterSendPacket_188: SUCCESS! uEnterSendPacket", uEnterSendPacket);
+	DEBUGLOGHEX(L"ScannerEnterSendPacket_188: uEnterSendPacket_ret", uEnterSendPacket_ret);
+	DEBUGLOGHEX(L"ScannerEnterSendPacket_188: uCClientSocket", uCClientSocket);
+
 	return true;
 }
 #endif
@@ -527,6 +554,10 @@ bool PacketHook_Thread(HookSettings &hs) {
 }
 
 bool PacketHook_Conf(HookSettings &hs) {
+	DEBUGLOG(L"========================================");
+	DEBUGLOG(L"PacketHook_Conf: Starting hook configuration");
+	DEBUGLOG(L"========================================");
+
 	SetGlobalSettings(hs);
 	Rosemary r;
 	ULONG_PTR uProcessPacket = 0;
@@ -536,8 +567,12 @@ bool PacketHook_Conf(HookSettings &hs) {
 #endif
 
 	if (hs.addr_SendPacket) {
+		DEBUGLOGHEX(L"PacketHook_Conf: Hooking SendPacket at", hs.addr_SendPacket);
 		SHookFunction(SendPacket, hs.addr_SendPacket);
 		uSendPacket = hs.addr_SendPacket;
+		DEBUGLOG(L"PacketHook_Conf: SendPacket hook installed");
+	} else {
+		DEBUGLOG(L"PacketHook_Conf: WARNING - No SendPacket address configured!");
 	}
 
 #ifndef _WIN64
@@ -568,16 +603,24 @@ bool PacketHook_Conf(HookSettings &hs) {
 	}
 #else
 	if (_SendPacket) {
+		DEBUGLOG(L"PacketHook_Conf: Scanning for EnterSendPacket (pattern 0)...");
 		uEnterSendPacket = r.Scan(AOB_EnterSendPacket[0], ScannerEnterSendPacket);
 		if (!uEnterSendPacket) {
+			DEBUGLOG(L"PacketHook_Conf: Pattern 0 failed, trying pattern 1 (v188)...");
 			uEnterSendPacket = r.Scan(AOB_EnterSendPacket[1], ScannerEnterSendPacket_188);
 		}
 		if (uEnterSendPacket) {
+			DEBUGLOG(L"PacketHook_Conf: EnterSendPacket found! Installing hook...");
 			SHookFunction(EnterSendPacket, uEnterSendPacket);
+			DEBUGLOG(L"PacketHook_Conf: EnterSendPacket hook installed");
+		} else {
+			DEBUGLOG(L"PacketHook_Conf: ERROR - EnterSendPacket NOT FOUND! SendPacket button will not work!");
 		}
 		SCANRES(uEnterSendPacket);
 		SCANRES(uEnterSendPacket_ret);
 		SCANRES(uCClientSocket);
+	} else {
+		DEBUGLOG(L"PacketHook_Conf: Skipping EnterSendPacket scan (_SendPacket is NULL)");
 	}
 #endif
 

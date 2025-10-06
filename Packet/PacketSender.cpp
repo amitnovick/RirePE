@@ -2,6 +2,7 @@
 #include"../Share/Hook/SimpleHook.h"
 #include"../Packet/PacketHook.h"
 #include"../RirePE/RirePE.h"
+#include"../Share/Simple/DebugLog.h"
 
 bool bInjectorCallback = false;
 bool bToBeInject = false;
@@ -15,6 +16,7 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 
 	PacketEditorMessage *pcm = (PacketEditorMessage *)&data[0];
 	if (pcm->header == SENDPACKET) {
+		DEBUGLOG(L"PacketInjector: SENDPACKET requested");
 #ifdef _WIN64
 		WORD wHeader = *(WORD *)&pcm->Binary.packet[0];
 		OutPacket p;
@@ -36,11 +38,26 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 			SendPacket_Hook(_CClientSocket(), &p);
 		}
 #else
+		DEBUGLOGHEX(L"PacketInjector: Packet length", pcm->Binary.length);
+		DEBUGLOGHEX(L"PacketInjector: Packet header", *(WORD *)&pcm->Binary.packet[0]);
+
+		extern void (__thiscall *_EnterSendPacket)(OutPacket *op);
+		if (_EnterSendPacket == NULL) {
+			DEBUGLOG(L"PacketInjector: CRITICAL ERROR - _EnterSendPacket is NULL!");
+			DEBUGLOG(L"PacketInjector: This means EnterSendPacket was not found during AOB scan");
+			DEBUGLOG(L"PacketInjector: The SendPacket button cannot work without this!");
+		} else {
+			DEBUGLOGHEX(L"PacketInjector: _EnterSendPacket address", (ULONG_PTR)_EnterSendPacket);
+			DEBUGLOG(L"PacketInjector: Calling COutPacket_Hook...");
+		}
+
 		OutPacket tp;
 		COutPacket_Hook(&tp, 0, *(WORD *)&pcm->Binary.packet[0]);
 
+		DEBUGLOG(L"PacketInjector: Calling EnterSendPacket_Hook...");
 		OutPacket p = { 0x00, &pcm->Binary.packet[0] , pcm->Binary.length, 0x00 };
 		EnterSendPacket_Hook(&p);
+		DEBUGLOG(L"PacketInjector: EnterSendPacket_Hook completed");
 #endif
 	}
 	else {
