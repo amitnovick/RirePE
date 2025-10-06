@@ -380,6 +380,8 @@ ULONG_PTR uEnterSendPacket = 0;
 ULONG_PTR uEnterSendPacket_ret = 0;
 ULONG_PTR uCClientSocket = 0;
 void(*_EnterSendPacket)(OutPacket *op) = NULL;
+void(*_EnterSendPacket_Original)(OutPacket *op) = NULL; // Original address before hooking
+
 void EnterSendPacket_Hook(OutPacket *op) {
 	bool bBlock = false;
 	AddSendPacket(op, (ULONG_PTR)_ReturnAddress(), bBlock);
@@ -515,6 +517,8 @@ bool PacketHook_Thread(HookSettings &hs) {
 			uEnterSendPacket = r.Scan(AOB_EnterSendPacket[2], ScannerEnterSendPacket);
 		}
 		if (uEnterSendPacket) {
+			// Save original address BEFORE hooking
+			_EnterSendPacket_Original = (decltype(_EnterSendPacket_Original))uEnterSendPacket;
 			SHookFunction(EnterSendPacket, uEnterSendPacket);
 		}
 		SCANRES(uEnterSendPacket);
@@ -631,6 +635,9 @@ bool PacketHook_Conf(HookSettings &hs) {
 
 		if (uEnterSendPacket) {
 			DEBUGLOG(L"PacketHook_Conf: EnterSendPacket found! Installing hook...");
+			// Save original address BEFORE hooking
+			_EnterSendPacket_Original = (decltype(_EnterSendPacket_Original))uEnterSendPacket;
+			DEBUGLOGHEX(L"PacketHook_Conf: Saved original EnterSendPacket", (ULONG_PTR)_EnterSendPacket_Original);
 			SHookFunction(EnterSendPacket, uEnterSendPacket);
 			DEBUGLOG(L"PacketHook_Conf: EnterSendPacket hook installed");
 		} else {

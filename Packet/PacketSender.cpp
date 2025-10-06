@@ -41,23 +41,24 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 		DEBUGLOGHEX(L"PacketInjector: Packet length", pcm->Binary.length);
 		DEBUGLOGHEX(L"PacketInjector: Packet header", *(WORD *)&pcm->Binary.packet[0]);
 
-		extern void (*_EnterSendPacket)(OutPacket *op);
-		if (_EnterSendPacket == NULL) {
-			DEBUGLOG(L"PacketInjector: CRITICAL ERROR - _EnterSendPacket is NULL!");
+		extern void (*_EnterSendPacket_Original)(OutPacket *op);
+
+		if (_EnterSendPacket_Original == NULL) {
+			DEBUGLOG(L"PacketInjector: CRITICAL ERROR - _EnterSendPacket_Original is NULL!");
 			DEBUGLOG(L"PacketInjector: This means EnterSendPacket was not found during AOB scan");
 			DEBUGLOG(L"PacketInjector: The SendPacket button cannot work without this!");
 		} else {
-			DEBUGLOGHEX(L"PacketInjector: _EnterSendPacket address", (ULONG_PTR)_EnterSendPacket);
+			DEBUGLOGHEX(L"PacketInjector: Using EnterSendPacket_Original", (ULONG_PTR)_EnterSendPacket_Original);
 			DEBUGLOG(L"PacketInjector: Calling COutPacket_Hook...");
 		}
 
 		OutPacket tp;
 		COutPacket_Hook(&tp, 0, *(WORD *)&pcm->Binary.packet[0]);
 
-		DEBUGLOG(L"PacketInjector: Calling EnterSendPacket_Hook...");
+		DEBUGLOG(L"PacketInjector: Calling _EnterSendPacket_Original directly...");
 		OutPacket p = { 0x00, &pcm->Binary.packet[0] , pcm->Binary.length, 0x00 };
-		EnterSendPacket_Hook(&p);
-		DEBUGLOG(L"PacketInjector: EnterSendPacket_Hook completed");
+		_EnterSendPacket_Original(&p);
+		DEBUGLOG(L"PacketInjector: Packet sent successfully!");
 #endif
 	}
 	else {
