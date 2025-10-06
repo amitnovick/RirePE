@@ -106,6 +106,8 @@ DWORD Offset_SendPacket_EH_CClientSocket[] = {
 
 #else
 std::wstring AOB_EnterSendPacket[] = {
+	// v92
+	L"8B 44 24 04 8B 0D A0 EF C2 00 50 E8 ?? ?? ?? ?? C3",
 	// v164.0 to v186.1
 	L"FF 74 24 04 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? C3",
 	// v188.0
