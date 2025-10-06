@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-2019  # Has Visual Studio 2019 with v141 toolset support
+    runs-on: windows-latest  # Uses windows-2022
 
     steps:
     - name: Checkout code
@@ -18,11 +18,11 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
 
-    - name: Install Visual Studio 2017 Build Tools (v141)
+    - name: Install Visual Studio 2017 Build Tools (v141) and Windows 10 SDK
       shell: powershell
       run: |
-        # VS2019 includes v141 toolset, but we need to ensure it's installed
-        choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.v141.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.17763" -y
+        # Install v141 toolset and Windows 10 SDK 17763
+        choco install visualstudio2019buildtools --package-parameters "--add Microsoft.VisualStudio.Component.VC.v141.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.17763 --quiet --wait" -y
 
     - name: Restore NuGet packages
       run: nuget restore RirePE.sln
