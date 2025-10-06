@@ -41,7 +41,7 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 		DEBUGLOGHEX(L"PacketInjector: Packet length", pcm->Binary.length);
 		DEBUGLOGHEX(L"PacketInjector: Packet header", *(WORD *)&pcm->Binary.packet[0]);
 
-		extern void (__thiscall *_EnterSendPacket)(OutPacket *op);
+		extern void (*_EnterSendPacket)(OutPacket *op);
 		if (_EnterSendPacket == NULL) {
 			DEBUGLOG(L"PacketInjector: CRITICAL ERROR - _EnterSendPacket is NULL!");
 			DEBUGLOG(L"PacketInjector: This means EnterSendPacket was not found during AOB scan");
