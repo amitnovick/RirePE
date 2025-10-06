@@ -18,17 +18,21 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
 
-    - name: Check available Windows SDKs
+    - name: Detect available Windows SDK
+      id: detect-sdk
       shell: powershell
       run: |
-        Write-Host "Available Windows SDK versions:"
-        Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include" -Directory | Select-Object Name
+        $sdks = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include" -Directory | Select-Object -ExpandProperty Name
+        Write-Host "Available Windows SDK versions: $sdks"
+        $latestSdk = $sdks | Sort-Object -Descending | Select-Object -First 1
+        Write-Host "Using SDK version: $latestSdk"
+        echo "SDK_VERSION=$latestSdk" >> $env:GITHUB_ENV
 
     - name: Restore NuGet packages
       run: nuget restore RirePE.sln
 
     - name: Build RirePE (32-bit) and Packet.dll (32-bit)
-      run: msbuild RirePE.sln /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v141
+      run: msbuild RirePE.sln /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v141 /p:WindowsTargetPlatformVersion=${{ env.SDK_VERSION }}
 
     - name: List build outputs
       shell: powershell
