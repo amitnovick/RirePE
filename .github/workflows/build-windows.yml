@@ -32,7 +32,7 @@ jobs:
       run: nuget restore RirePE.sln
 
     - name: Build RirePE (32-bit) and Packet.dll (32-bit)
-      run: msbuild RirePE.sln /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v141 /p:WindowsTargetPlatformVersion=${{ env.SDK_VERSION }}
+      run: msbuild RirePE.sln /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=${{ env.SDK_VERSION }}
 
     - name: List build outputs
       shell: powershell
