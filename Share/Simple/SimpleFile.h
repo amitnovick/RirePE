@@ -36,8 +36,9 @@ public:
 	bool Isx64();
 	ULONG_PTR GetRawAddress(ULONG_PTR uVirtualAddress);
 	ULONG_PTR GetVirtualAddress(ULONG_PTR uRawAddress);
-	AddrInfo AobScan(std::wstring wAob, bool (*scan_func)(Frost &, ULONG_PTR) = NULL, bool scan_all_section = false);
-	std::vector<AddrInfo> AobScanAll(std::wstring wAob, bool (*scan_func)(Frost &, ULONG_PTR) = NULL, bool scan_all_section = false);
+	AddrInfo AobScan(std::wstring wAob, bool scan_all_section = false);
+	std::vector<AddrInfo> AobScanFin(std::wstring wAob, bool scan_all_section = false);
+	std::vector<AddrInfo> AobScanCustomAll(std::wstring wAob, bool(*scan_func)(Frost &, ULONG_PTR));
 	int GetSectionNumber(ULONG_PTR uVirtualAddress);
 	AddrInfo ScanString(std::wstring wString);
 	AddrInfo ScanString(std::string sString);

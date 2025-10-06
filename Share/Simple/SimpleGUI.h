@@ -56,11 +56,11 @@ private:
 	CallbackType callback_type;
 
 public:
-	bool SetOnCreate(bool(*function)(Alice&));
-	bool SetOnCommand(bool(*function)(Alice&, int));
-	bool SetOnCommandEx(bool(*function)(Alice&, int, int));
-	bool SetOnNotify(bool(*function)(Alice&, int));
-	bool SetOnDropFile(bool(*function)(Alice&, wchar_t*));
+	bool SetOnCreate(bool (*function)(Alice&));
+	bool SetOnCommand(bool (*function)(Alice&, int));
+	bool SetOnCommandEx(bool (*function)(Alice&, int, int));
+	bool SetOnNotify(bool (*function)(Alice&, int));
+	bool SetOnDropFile(bool (*function)(Alice&, wchar_t*));
 	bool SetCallback(decltype(DefWindowProcW) *function, CallbackType ct);
 	CallbackType GetCallbackType();
 	LRESULT CALLBACK Callback(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
@@ -68,8 +68,18 @@ public:
 
 	// Control
 private:
+	typedef struct {
+		HWND child;
+		HWND old_parent;
+		HWND new_parent;
+		LONG style;
+		int width;
+		int height;
+	} EmbedInfo;
+
 	std::vector<size_t> control_id_list;
 	std::vector<HWND> control_hwnd_list;
+	std::vector<EmbedInfo> embed_list;
 
 	bool SetFont(size_t nIDDlgItem);
 	int AutoWidth(std::wstring wText);
@@ -95,6 +105,7 @@ public:
 	std::wstring ComboBoxGetText(size_t nIDDlgItem, int index);
 	std::wstring ComboBoxGetSelectedText(size_t nIDDlgItem);
 	bool Embed(HWND hWnd, int nWidth, int nHeight);
+	void EmbedOff();
 
 	// ListView
 private:
