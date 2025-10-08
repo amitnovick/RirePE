@@ -4,10 +4,12 @@ This document explains how to use the TCP socket functionality to communicate wi
 
 ## Overview
 
-The DLL now supports **two communication modes**:
+The DLL now supports **dual communication modes**:
 
-1. **Named Pipes** (default) - Original Windows-only IPC
-2. **TCP Sockets** (new) - Cross-platform network communication
+1. **Named Pipes** (always active) - Local RirePE.exe GUI for Windows monitoring
+2. **TCP Sockets** (optional) - Simultaneous remote monitoring from any platform
+
+**Key Feature**: Both modes can run **simultaneously**! You can have the local GUI running on Windows while also streaming packets to a remote Linux/Mac Python client.
 
 ## Configuration
 
@@ -22,11 +24,15 @@ TCP_PORT=9999
 
 ### Configuration Options
 
-- `USE_TCP`: Set to `1` to enable TCP mode, `0` for named pipes (default: 0)
+- `USE_TCP`: Set to `1` to enable TCP mode in addition to pipes (default: 0)
 - `TCP_HOST`: Server IP address to connect to (default: 127.0.0.1)
 - `TCP_PORT`: Server port number (default: 9999)
 
-**Note**: When `USE_TCP=1`, the DLL will NOT launch RirePE.exe. It will connect to an external TCP server instead.
+**Behavior:**
+- `USE_TCP=0` (default): Only RirePE.exe GUI (named pipes only)
+- `USE_TCP=1`: **Both** RirePE.exe GUI AND TCP streaming to remote clients
+
+**Note**: The DLL always launches RirePE.exe for the local GUI. When TCP is enabled, packets are **broadcast** to both the local GUI and remote TCP clients simultaneously.
 
 ## Python CLI Client Usage
 
@@ -100,38 +106,61 @@ python3 packet_monitor.py --host 127.0.0.1 --port 9999 --send "FF 00 AA BB" --se
 
 3. Configure firewall to allow port 9999
 
-### Remote Machine (Windows → Linux)
+### Dual Mode (Local GUI + Remote Monitoring)
 
-This is the typical use case - run a Python server on Linux to collect packets from Windows DLL.
+**Use Case**: Monitor packets on both Windows GUI and remote Linux machine simultaneously.
 
-**Linux side** (create a simple TCP server):
-
-```python
-import socket
-from packet_monitor import PacketMonitor
-
-# Listen for connections
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(('0.0.0.0', 9999))
-server.listen(1)
-print("[+] Waiting for DLL connection...")
-
-client_sock, addr = server.accept()
-print(f"[+] Connected from {addr}")
-
-# Use PacketMonitor to handle the connection
-monitor = PacketMonitor()
-monitor.sock = client_sock
-monitor.run()
+**Linux side** (192.168.1.50):
+```bash
+python3 packet_monitor.py --host 0.0.0.0 --port 9999 --log remote_packets.log
 ```
 
 **Windows side** (DLL config):
-
 ```ini
+[Packet]
 USE_TCP=1
 TCP_HOST=192.168.1.50
 TCP_PORT=9999
 ```
+
+**Result**:
+- ✅ RirePE.exe GUI opens on Windows (local monitoring)
+- ✅ Python client on Linux receives same packets (remote monitoring)
+- ✅ Both see identical packet streams in real-time!
+
+## How Dual Mode Works
+
+### Packet Broadcasting
+
+When `USE_TCP=1`, the DLL **broadcasts** each packet to multiple destinations:
+
+```
+Game Packet
+    ↓
+DLL Hook
+    ↓
+PacketQueue (async)
+    ↓
+    ├─→ Named Pipe → RirePE.exe (Windows GUI)
+    └─→ TCP Socket → Python Client (Remote)
+```
+
+**Send Behavior:**
+- Packets are sent to **both** pipe and TCP simultaneously
+- If either fails, the other continues working
+- Success is reported if **at least one** destination receives the packet
+
+**Receive Behavior (for blocking mode):**
+- Priority given to local GUI (named pipe) response
+- Falls back to TCP response if pipe fails
+- First response wins
+
+### Benefits
+
+1. **Redundancy**: If one monitoring system fails, the other keeps working
+2. **Flexibility**: Local debugging with GUI + remote logging simultaneously
+3. **Team collaboration**: Multiple people can monitor same game instance
+4. **Automation**: Python client can auto-process packets while GUI shows them visually
 
 ## Protocol Details
 
@@ -216,24 +245,59 @@ msbuild RirePE.sln /p:Configuration=Release /p:Platform=x86
 - For local monitoring, consider using named pipes instead
 - Reduce logging verbosity if needed
 
-## Example: Complete Setup
+## Example Configurations
 
-1. **Edit RirePE.ini**:
-   ```ini
-   [Packet]
-   USE_TCP=1
-   TCP_HOST=192.168.1.50
-   TCP_PORT=9999
-   ```
+### Example 1: Local Only (Default)
 
-2. **On Linux (192.168.1.50)**:
-   ```bash
-   python3 packet_monitor.py --host 0.0.0.0 --port 9999 --log game_packets.log
-   ```
+**RirePE.ini:**
+```ini
+[Packet]
+# USE_TCP not set or commented out
+```
 
-3. **On Windows**: Inject the DLL into the game
+**Result:**
+- Only RirePE.exe GUI shows packets
+- No network traffic
+- Original behavior
 
-4. **Watch packets flow** on the Linux terminal!
+### Example 2: Local GUI + Remote Monitoring
+
+**RirePE.ini:**
+```ini
+[Packet]
+USE_TCP=1
+TCP_HOST=192.168.1.50
+TCP_PORT=9999
+```
+
+**On Linux (192.168.1.50):**
+```bash
+python3 packet_monitor.py --host 0.0.0.0 --port 9999 --log game_packets.log
+```
+
+**On Windows:**
+1. Configure RirePE.ini as shown above
+2. Inject the DLL into the game
+3. **Both** RirePE.exe GUI and Python client receive packets!
+
+### Example 3: Localhost Monitoring (Windows Only)
+
+If you want to use the Python client on the same Windows machine:
+
+**RirePE.ini:**
+```ini
+[Packet]
+USE_TCP=1
+TCP_HOST=127.0.0.1
+TCP_PORT=9999
+```
+
+**On Windows:**
+1. Run Python client: `python packet_monitor.py --host 127.0.0.1 --port 9999`
+2. Inject the DLL
+3. Both RirePE.exe GUI and Python console show packets
+
+**Note**: Currently the DLL connects to **one** TCP server. For multiple remote clients, you would need to implement a TCP server mode in the DLL (future enhancement).
 
 ## Files Added/Modified
 

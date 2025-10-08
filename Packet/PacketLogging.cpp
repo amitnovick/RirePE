@@ -255,21 +255,33 @@ bool RestartPipeClient() {
 	return StartPipeClient();
 }
 
-// Abstract send/recv functions that work with both pipe and TCP
+// Abstract send/recv functions that broadcast to both pipe and TCP
 bool SendPacketData(BYTE *bData, ULONG_PTR uLength) {
-	if (g_UseTCP) {
-		return SendPacketDataTCP(bData, uLength);
-	} else if (pc) {
-		return pc->Send(bData, uLength);
+	bool success = false;
+
+	// Always send to pipe client (RirePE.exe) if available
+	if (pc) {
+		success = pc->Send(bData, uLength) || success;
 	}
-	return false;
+
+	// Also send to TCP client if enabled (allows simultaneous local + remote monitoring)
+	if (g_UseTCP) {
+		success = SendPacketDataTCP(bData, uLength) || success;
+	}
+
+	return success;
 }
 
 bool RecvPacketData(std::vector<BYTE> &vData) {
-	if (g_UseTCP) {
-		return RecvPacketDataTCP(vData);
-	} else if (pc) {
-		return pc->Recv(vData);
+	// Receive from pipe client (priority - local GUI response)
+	if (pc && pc->Recv(vData)) {
+		return true;
 	}
+
+	// Fallback to TCP client if pipe fails
+	if (g_UseTCP && RecvPacketDataTCP(vData)) {
+		return true;
+	}
+
 	return false;
 }

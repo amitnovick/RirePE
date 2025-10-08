@@ -155,16 +155,16 @@ std::wstring GetPipeNameSender() {
 bool RunRirePE(HookSettings &hs) {
 	extern bool g_UseTCP;
 
-	// Only launch RirePE.exe if using pipes (not TCP)
-	if (!g_UseTCP) {
-		std::wstring wDir;
-		if (GetDir(wDir, hs.hinstDLL)) {
-			std::wstring param = std::to_wstring(target_pid) + L" MapleStoryClass";
-			ShellExecuteW(NULL, NULL, (wDir + L"\\RirePE.exe").c_str(), param.c_str(), wDir.c_str(), SW_SHOW);
-		}
-		StartPipeClient();
-	} else {
-		// TCP mode - connect to remote server
+	// Always launch RirePE.exe and start pipe client for local GUI
+	std::wstring wDir;
+	if (GetDir(wDir, hs.hinstDLL)) {
+		std::wstring param = std::to_wstring(target_pid) + L" MapleStoryClass";
+		ShellExecuteW(NULL, NULL, (wDir + L"\\RirePE.exe").c_str(), param.c_str(), wDir.c_str(), SW_SHOW);
+	}
+	StartPipeClient();
+
+	// Additionally start TCP client if enabled (allows both local GUI and remote monitoring)
+	if (g_UseTCP) {
 		StartTCPClient();
 	}
 
