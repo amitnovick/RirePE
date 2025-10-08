@@ -19,7 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ZycoreExportConfig.h" />
+    <ClInclude Include="..\ZycoreExportConfig.h" />
     <ClInclude Include="Allocator.h" />
     <ClInclude Include="API\Memory.h" />
     <ClInclude Include="API\Synchronization.h" />

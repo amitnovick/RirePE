@@ -33,7 +33,7 @@
     <ClCompile Include="..\Zycore\Zycore.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Zycore\ZycoreExportConfig.h" />
+    <ClInclude Include="..\ZycoreExportConfig.h" />
     <ClInclude Include="..\Zycore\Allocator.h" />
     <ClInclude Include="..\Zycore\API\Memory.h" />
     <ClInclude Include="..\Zycore\API\Synchronization.h" />
