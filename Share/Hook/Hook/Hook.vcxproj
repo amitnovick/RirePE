@@ -148,10 +148,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\Hook64\SimpleHook.cpp" />
+    <ClCompile Include="SimpleHook.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Hook64\SimpleHook.h" />
+    <ClInclude Include="SimpleHook.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

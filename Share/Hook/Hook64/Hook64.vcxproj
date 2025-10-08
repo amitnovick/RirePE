@@ -153,10 +153,10 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="SimpleHook.cpp" />
+    <ClCompile Include="..\Hook\SimpleHook.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="SimpleHook.h" />
+    <ClInclude Include="..\Hook\SimpleHook.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
