@@ -15,99 +15,99 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Zycore64\ZycoreExportConfig.h">
+    <ClInclude Include="ZycoreExportConfig.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\Allocator.h">
+    <ClInclude Include="Allocator.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\API\Memory.h">
+    <ClInclude Include="Memory.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\API\Synchronization.h">
+    <ClInclude Include="Synchronization.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\API\Terminal.h">
+    <ClInclude Include="Terminal.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\API\Thread.h">
+    <ClInclude Include="Thread.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\ArgParse.h">
+    <ClInclude Include="ArgParse.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\Bitset.h">
+    <ClInclude Include="Bitset.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\Comparison.h">
+    <ClInclude Include="Comparison.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\Defines.h">
+    <ClInclude Include="Defines.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\Format.h">
+    <ClInclude Include="Format.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\LibC.h">
+    <ClInclude Include="LibC.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\List.h">
+    <ClInclude Include="List.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\Object.h">
+    <ClInclude Include="Object.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\Status.h">
+    <ClInclude Include="Status.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\String.h">
+    <ClInclude Include="String.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\Types.h">
+    <ClInclude Include="Types.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\Vector.h">
+    <ClInclude Include="Vector.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Zycore64\Zycore\Zycore.h">
+    <ClInclude Include="Zycore.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\Zycore64\Zycore\Allocator.c">
+    <ClCompile Include="Allocator.c">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Zycore64\Zycore\API\Memory.c">
+    <ClCompile Include="Memory.c">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Zycore64\Zycore\API\Synchronization.c">
+    <ClCompile Include="Synchronization.c">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Zycore64\Zycore\API\Terminal.c">
+    <ClCompile Include="Terminal.c">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Zycore64\Zycore\API\Thread.c">
+    <ClCompile Include="Thread.c">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Zycore64\Zycore\ArgParse.c">
+    <ClCompile Include="ArgParse.c">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Zycore64\Zycore\Bitset.c">
+    <ClCompile Include="Bitset.c">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Zycore64\Zycore\Format.c">
+    <ClCompile Include="Format.c">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Zycore64\Zycore\List.c">
+    <ClCompile Include="List.c">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Zycore64\Zycore\String.c">
+    <ClCompile Include="String.c">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Zycore64\Zycore\Vector.c">
+    <ClCompile Include="Vector.c">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Zycore64\Zycore\Zycore.c">
+    <ClCompile Include="Zycore.c">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
   </ItemGroup>

@@ -2,7 +2,7 @@
 #define ZYCORE_STATIC_DEFINE
 #define ZYDIS_STATIC_DEFINE
 #include<inttypes.h>
-#include"../Zydis/Zydis/Zydis.h"
+#include<Zydis/Zydis.h>
 #pragma comment(lib, "../Share/Hook/Zydis.lib")
 #pragma comment(lib, "../Share/Hook/Zycore.lib")
 #include<vector>

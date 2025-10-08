@@ -5,11 +5,7 @@
 #include<vector>
 
 #ifndef SIMPLE_LIB
-#ifndef _WIN64
 #pragma comment(lib, "../Share/Hook/Hook.lib")
-#else
-#pragma comment(lib, "../Share/Hook/Hook64.lib")
-#endif
 #else
 #endif
 

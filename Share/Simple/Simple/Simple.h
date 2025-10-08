@@ -2,11 +2,7 @@
 #define __SIMPLE__H__
 
 #ifndef SIMPLE_LIB
-#ifndef _WIN64
 #pragma comment(lib, "../Share/Simple/Simple.lib")
-#else
-#pragma comment(lib, "../Share/Simple/Simple64.lib")
-#endif
 #else
 #endif
 

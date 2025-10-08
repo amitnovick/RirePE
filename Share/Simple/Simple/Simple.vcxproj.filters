@@ -15,69 +15,69 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Simple64\Simple.h">
+    <ClInclude Include="Simple.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Simple64\SimpleConfig.h">
+    <ClInclude Include="SimpleConfig.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Simple64\SimpleGUI.h">
+    <ClInclude Include="SimpleGUI.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Simple64\SimpleInjector.h">
+    <ClInclude Include="SimpleInjector.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Simple64\SimpleMemory.h">
+    <ClInclude Include="SimpleMemory.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Simple64\SimplePipe.h">
+    <ClInclude Include="SimplePipe.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="..\Simple64\SimpleFile.h">
+    <ClInclude Include="SimpleFile.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\Simple64\Simple.cpp">
+    <ClCompile Include="Simple.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Simple64\SimpleConfig.cpp">
+    <ClCompile Include="SimpleConfig.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Simple64\SimpleGUI.cpp">
+    <ClCompile Include="SimpleGUI.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Simple64\SimpleGUICallback.cpp">
+    <ClCompile Include="SimpleGUICallback.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Simple64\SimpleGUIControl.cpp">
+    <ClCompile Include="SimpleGUIControl.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Simple64\SimpleGUIListView.cpp">
+    <ClCompile Include="SimpleGUIListView.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Simple64\SimpleInjector.cpp">
+    <ClCompile Include="SimpleInjector.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Simple64\SimpleMemory.cpp">
+    <ClCompile Include="SimpleMemory.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Simple64\SimpleMemoryAobScan.cpp">
+    <ClCompile Include="SimpleMemoryAobScan.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Simple64\SimpleMemoryCode.cpp">
+    <ClCompile Include="SimpleMemoryCode.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Simple64\SimplePipeClient.cpp">
+    <ClCompile Include="SimplePipeClient.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Simple64\SimplePipeServer.cpp">
+    <ClCompile Include="SimplePipeServer.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Simple64\SimplePipeServerThread.cpp">
+    <ClCompile Include="SimplePipeServerThread.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="..\Simple64\SimpleFile.cpp">
+    <ClCompile Include="SimpleFile.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
   </ItemGroup>
