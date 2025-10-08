@@ -172,11 +172,29 @@ For `SENDPACKET` and `RECVPACKET` messages, the server should respond with:
 
 ## Building the DLL with TCP Support
 
-The TCP socket code is already integrated. You need to:
+The TCP socket code is already integrated into the project files:
 
-1. Add `SimpleTCP.cpp` to your Visual Studio project
-2. Link against `ws2_32.lib` (already in SimpleTCP.h via `#pragma comment`)
-3. Rebuild the DLL
+**Files Added:**
+- `Share/Simple/SimpleTCP.h` - TCP socket classes header
+- `Share/Simple/SimpleTCP.cpp` - TCP socket implementation
+- `Packet/PacketTCP.cpp` - TCP wrapper to avoid winsock header conflicts
+
+**Project Configuration:**
+- `Packet.vcxproj` has been updated to include both `SimpleTCP.cpp` and `PacketTCP.cpp`
+- `ws2_32.lib` is automatically linked via `#pragma comment` in `SimpleTCP.h`
+
+**Build Instructions:**
+```bash
+# Build with MSBuild (from project root)
+msbuild RirePE.sln /p:Configuration=Release /p:Platform=x86
+
+# Or open in Visual Studio and build normally
+```
+
+**Important Notes:**
+- The TCP code uses `winsock2.h` which must be included before `windows.h`
+- To avoid header conflicts, TCP functionality is isolated in `PacketTCP.cpp`
+- No manual configuration needed - just build the solution
 
 ## Troubleshooting
 

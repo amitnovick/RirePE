@@ -39,9 +39,7 @@ extern CRITICAL_SECTION cs;
 bool StartPipeClient();
 bool RestartPipeClient();
 
-// TCP Client support
-class TCPClient;
-extern TCPClient *tc;
+// TCP Client support (implemented in PacketTCP.cpp)
 bool StartTCPClient();
 bool RestartTCPClient();
 

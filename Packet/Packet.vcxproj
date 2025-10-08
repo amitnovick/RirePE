@@ -153,6 +153,8 @@
     <ClCompile Include="PacketLogging.cpp" />
     <ClCompile Include="PacketQueue.cpp" />
     <ClCompile Include="PacketSender.cpp" />
+    <ClCompile Include="PacketTCP.cpp" />
+    <ClCompile Include="..\Share\Simple\SimpleTCP.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AobList.h" />

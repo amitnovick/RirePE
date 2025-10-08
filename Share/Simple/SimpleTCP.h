@@ -1,8 +1,14 @@
 ﻿#ifndef __SIMPLETCP_H__
 #define __SIMPLETCP_H__
 
+// Must include winsock2 BEFORE windows.h to avoid conflicts with old winsock.h
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <Windows.h>
 #include <vector>
 #include <string>
 
