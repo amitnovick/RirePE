@@ -5,6 +5,7 @@
 #include"../Packet/PacketHook.h"
 #include"../Share/Simple/Simple.h"
 #include<vector>
+#include<unordered_map>
 
 typedef struct {
 	DWORD id; // パケット識別子

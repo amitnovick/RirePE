@@ -151,12 +151,14 @@
     <ClCompile Include="DllMain.cpp" />
     <ClCompile Include="PacketHook.cpp" />
     <ClCompile Include="PacketLogging.cpp" />
+    <ClCompile Include="PacketQueue.cpp" />
     <ClCompile Include="PacketSender.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AobList.h" />
     <ClInclude Include="PacketHook.h" />
     <ClInclude Include="PacketLogging.h" />
+    <ClInclude Include="PacketQueue.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\.editorconfig" />

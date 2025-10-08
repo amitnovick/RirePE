@@ -152,11 +152,13 @@
     <ClInclude Include="..\Packet\AobList.h" />
     <ClInclude Include="..\Packet\PacketHook.h" />
     <ClInclude Include="..\Packet\PacketLogging.h" />
+    <ClInclude Include="..\Packet\PacketQueue.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Packet\DllMain.cpp" />
     <ClCompile Include="..\Packet\PacketHook.cpp" />
     <ClCompile Include="..\Packet\PacketLogging.cpp" />
+    <ClCompile Include="..\Packet\PacketQueue.cpp" />
     <ClCompile Include="..\Packet\PacketSender.cpp" />
   </ItemGroup>
   <ItemGroup>

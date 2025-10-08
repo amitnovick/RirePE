@@ -1,0 +1,256 @@
+﻿#include"../Share/Simple/Simple.h"
+#include"PacketQueue.h"
+#include"PacketLogging.h"
+
+PacketBufferPool* g_BufferPool = NULL;
+AsyncPacketQueue* g_PacketQueue = NULL;
+
+// ============================================================================
+// PacketBufferPool Implementation
+// ============================================================================
+
+PacketBufferPool::PacketBufferPool() {
+	InitializeCriticalSection(&cs);
+	for (size_t i = 0; i < POOL_SIZE; i++) {
+		buffers[i].in_use = false;
+		buffers[i].size = 0;
+	}
+}
+
+PacketBufferPool::~PacketBufferPool() {
+	DeleteCriticalSection(&cs);
+}
+
+BYTE* PacketBufferPool::Allocate(size_t size, size_t &buffer_index) {
+	if (size > BUFFER_SIZE) {
+		// Fallback to regular allocation for oversized packets
+		buffer_index = (size_t)-1;
+		return new BYTE[size];
+	}
+
+	EnterCriticalSection(&cs);
+	for (size_t i = 0; i < POOL_SIZE; i++) {
+		if (!buffers[i].in_use) {
+			buffers[i].in_use = true;
+			buffers[i].size = size;
+			buffer_index = i;
+			LeaveCriticalSection(&cs);
+			return buffers[i].data;
+		}
+	}
+	LeaveCriticalSection(&cs);
+
+	// Pool exhausted, fallback to regular allocation
+	buffer_index = (size_t)-1;
+	return new BYTE[size];
+}
+
+void PacketBufferPool::Free(size_t buffer_index) {
+	if (buffer_index == (size_t)-1) {
+		// Was allocated outside pool, caller must handle
+		return;
+	}
+
+	EnterCriticalSection(&cs);
+	if (buffer_index < POOL_SIZE) {
+		buffers[buffer_index].in_use = false;
+		buffers[buffer_index].size = 0;
+	}
+	LeaveCriticalSection(&cs);
+}
+
+// ============================================================================
+// AsyncPacketQueue Implementation
+// ============================================================================
+
+AsyncPacketQueue::AsyncPacketQueue() {
+	InitializeCriticalSection(&queue_cs);
+	wake_event = CreateEvent(NULL, FALSE, FALSE, NULL);
+	worker_thread = NULL;
+	running = false;
+}
+
+AsyncPacketQueue::~AsyncPacketQueue() {
+	Stop();
+	CloseHandle(wake_event);
+	DeleteCriticalSection(&queue_cs);
+}
+
+bool AsyncPacketQueue::Start() {
+	if (running) {
+		return true;
+	}
+
+	running = true;
+	worker_thread = CreateThread(NULL, 0, WorkerThreadProc, this, 0, NULL);
+	return worker_thread != NULL;
+}
+
+void AsyncPacketQueue::Stop() {
+	if (!running) {
+		return;
+	}
+
+	running = false;
+	SetEvent(wake_event);
+
+	if (worker_thread) {
+		WaitForSingleObject(worker_thread, 5000);
+		CloseHandle(worker_thread);
+		worker_thread = NULL;
+	}
+
+	// Clean up remaining queue items
+	EnterCriticalSection(&queue_cs);
+	while (!packet_queue.empty()) {
+		QueuedPacket qp = packet_queue.front();
+		packet_queue.pop();
+
+		if (qp.buffer_index != (size_t)-1) {
+			g_BufferPool->Free(qp.buffer_index);
+		} else {
+			delete[] qp.data;
+		}
+
+		if (qp.response_event) {
+			CloseHandle(qp.response_event);
+		}
+	}
+	LeaveCriticalSection(&queue_cs);
+}
+
+bool AsyncPacketQueue::QueuePacket(BYTE* data, size_t size, size_t buffer_index) {
+	QueuedPacket qp;
+	qp.data = data;
+	qp.size = size;
+	qp.buffer_index = buffer_index;
+	qp.needs_response = false;
+	qp.response_event = NULL;
+	qp.block_result = false;
+
+	EnterCriticalSection(&queue_cs);
+	packet_queue.push(qp);
+	LeaveCriticalSection(&queue_cs);
+
+	SetEvent(wake_event);
+	return true;
+}
+
+bool AsyncPacketQueue::QueuePacketBlocking(BYTE* data, size_t size, size_t buffer_index, bool &block_result) {
+	QueuedPacket qp;
+	qp.data = data;
+	qp.size = size;
+	qp.buffer_index = buffer_index;
+	qp.needs_response = true;
+	qp.response_event = CreateEvent(NULL, FALSE, FALSE, NULL);
+	qp.block_result = false;
+
+	if (!qp.response_event) {
+		if (buffer_index != (size_t)-1) {
+			g_BufferPool->Free(buffer_index);
+		} else {
+			delete[] data;
+		}
+		return false;
+	}
+
+	EnterCriticalSection(&queue_cs);
+	packet_queue.push(qp);
+	LeaveCriticalSection(&queue_cs);
+
+	SetEvent(wake_event);
+
+	// Wait for response
+	WaitForSingleObject(qp.response_event, INFINITE);
+	block_result = qp.block_result;
+	CloseHandle(qp.response_event);
+
+	return true;
+}
+
+DWORD WINAPI AsyncPacketQueue::WorkerThreadProc(LPVOID param) {
+	AsyncPacketQueue* queue = (AsyncPacketQueue*)param;
+	queue->ProcessQueue();
+	return 0;
+}
+
+void AsyncPacketQueue::ProcessQueue() {
+	while (running) {
+		WaitForSingleObject(wake_event, 100); // 100ms timeout for shutdown check
+
+		while (running) {
+			QueuedPacket qp;
+			bool has_packet = false;
+
+			EnterCriticalSection(&queue_cs);
+			if (!packet_queue.empty()) {
+				qp = packet_queue.front();
+				packet_queue.pop();
+				has_packet = true;
+			}
+			LeaveCriticalSection(&queue_cs);
+
+			if (!has_packet) {
+				break;
+			}
+
+			// Send packet through pipe
+			bool success = false;
+			if (pc && pc->Send(qp.data, qp.size)) {
+				success = true;
+
+				if (qp.needs_response) {
+					// Read response for blocking packets
+					BYTE response = 0;
+					std::vector<BYTE> vData;
+					if (pc->Recv(vData) && vData.size() >= 1) {
+						response = vData[0];
+						qp.block_result = (response == 1);
+					}
+				}
+			} else {
+				// Pipe failed, try restart
+				RestartPipeClient();
+			}
+
+			// Free buffer
+			if (qp.buffer_index != (size_t)-1) {
+				g_BufferPool->Free(qp.buffer_index);
+			} else {
+				delete[] qp.data;
+			}
+
+			// Signal response event if needed
+			if (qp.response_event) {
+				SetEvent(qp.response_event);
+			}
+		}
+	}
+}
+
+// ============================================================================
+// Global initialization
+// ============================================================================
+
+bool InitializePacketQueue() {
+	g_BufferPool = new PacketBufferPool();
+	g_PacketQueue = new AsyncPacketQueue();
+
+	if (!g_BufferPool || !g_PacketQueue) {
+		return false;
+	}
+
+	return g_PacketQueue->Start();
+}
+
+void ShutdownPacketQueue() {
+	if (g_PacketQueue) {
+		delete g_PacketQueue;
+		g_PacketQueue = NULL;
+	}
+
+	if (g_BufferPool) {
+		delete g_BufferPool;
+		g_BufferPool = NULL;
+	}
+}

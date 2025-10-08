@@ -1,6 +1,7 @@
 ﻿#include"../Share/Simple/Simple.h"
 #include"../Packet/PacketHook.h"
 #include"../Packet/PacketLogging.h"
+#include"../Packet/PacketQueue.h"
 #include"../RirePE/RirePE.h"
 
 
@@ -145,6 +146,12 @@ bool RunRirePE(HookSettings &hs) {
 
 bool PipeStartup(HookSettings &hs) {
 	target_pid = GetCurrentProcessId();
+
+	// Initialize async packet queue system
+	if (!InitializePacketQueue()) {
+		return false;
+	}
+
 	HANDLE hThread = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)RunRirePE, &hs, NULL, NULL);
 	if (hThread) {
 		CloseHandle(hThread);
@@ -190,6 +197,10 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
 		LoadPacketConfig(hinstDLL);
 		PacketHook(gHookSettings);
 		//SavePacketConfig();
+	}
+	else if (fdwReason == DLL_PROCESS_DETACH) {
+		// Clean shutdown of async queue
+		ShutdownPacketQueue();
 	}
 	return TRUE;
 }

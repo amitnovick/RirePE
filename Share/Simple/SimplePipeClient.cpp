@@ -45,7 +45,7 @@ bool PipeClient::Send(BYTE *bData, ULONG_PTR uLength) {
 
 	DWORD wb = 0;
 	BOOL ret = WriteFile(client_pipe, pm, (DWORD)pm_length, &wb, NULL);
-	FlushFileBuffers(client_pipe);
+	// Removed FlushFileBuffers for performance - not needed for named pipes
 
 	delete[] b;
 	return ret;
@@ -64,7 +64,7 @@ bool PipeClient::Recv(std::vector<BYTE> &vData) {
 	if (!ReadFile(client_pipe, &header, pm_length, &rb, NULL)) {
 		return false;
 	}
-	FlushFileBuffers(client_pipe);
+	// Removed FlushFileBuffers for performance - not needed for named pipes
 
 	if (header.magic != PIPE_MESSAGE_MAGIC) {
 		return false;
@@ -74,7 +74,7 @@ bool PipeClient::Recv(std::vector<BYTE> &vData) {
 	if (!ReadFile(client_pipe, &vData[0], (DWORD)header.length, &rb, NULL)) {
 		return false;
 	}
-	FlushFileBuffers(client_pipe);
+	// Removed FlushFileBuffers for performance - not needed for named pipes
 
 	return true;
 }

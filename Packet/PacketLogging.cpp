@@ -1,4 +1,5 @@
 ﻿#include"PacketLogging.h"
+#include"PacketQueue.h"
 
 //DWORD packet_id_out = (GetCurrentProcessId() << 16); // 偶数
 //DWORD packet_id_in = (GetCurrentProcessId() << 16) + 1; // 奇数
@@ -52,16 +53,23 @@ bool OutPacketLogging(MessageHeader type, OutPacket *op, void *retAddr) {
 
 
 void AddExtra(PacketExtraInformation &pxi) {
-	union {
-		PacketEditorMessage *pem;
-		BYTE *b;
-	};
+	if (!g_BufferPool || !g_PacketQueue) {
+		return; // Queue not initialized
+	}
 
-	b = new BYTE[sizeof(PacketEditorMessage) + pxi.size];
+	size_t total_size = sizeof(PacketEditorMessage) + pxi.size;
+	size_t buffer_index;
+	BYTE* b = g_BufferPool->Allocate(total_size, buffer_index);
 
-	if (!pem) {
+	if (!b) {
 		return;
 	}
+
+	union {
+		PacketEditorMessage *pem;
+		BYTE *pb;
+	};
+	pb = b;
 
 	pem->header = pxi.fmt;
 	pem->id = pxi.id;
@@ -77,69 +85,60 @@ void AddExtra(PacketExtraInformation &pxi) {
 		memcpy_s(&pem->Extra.data[0], pxi.size, &pxi.data[0], pxi.size);
 	}
 
-	if (!pc->Send(b, sizeof(PacketEditorMessage) + pxi.size)) {
-		RestartPipeClient();
-		pc->Send(b, sizeof(PacketEditorMessage) + pxi.size); // retry
-	}
-
-	delete pem;
+	// Queue async (no response needed for format info)
+	g_PacketQueue->QueuePacket(b, total_size, buffer_index);
 }
 
-// for SendPacket format
-std::vector<PacketExtraInformation> list_pei;
+// for SendPacket format - using unordered_map for O(1) lookup
+std::unordered_map<ULONG_PTR, std::vector<PacketExtraInformation>> packet_tracking_map;
 
 void ClearQueue(OutPacket *op) {
-	auto itr = list_pei.begin();
-	while (itr != list_pei.end()) {
-		if (itr->tracking == (ULONG_PTR)op) {
-			itr = list_pei.erase(itr);
-		}
-		else {
-			itr++;
-		}
+	ULONG_PTR tracking_id = (ULONG_PTR)op;
+	auto it = packet_tracking_map.find(tracking_id);
+	if (it != packet_tracking_map.end()) {
+		packet_tracking_map.erase(it);
 	}
 }
 
 void AddQueue(PacketExtraInformation &pxi) {
 	//DEBUG(L"debug... ID : " + std::to_wstring(pxi.id) + L", " + std::to_wstring(pxi.pos) + L", " + std::to_wstring(pxi.size));
-	list_pei.push_back(pxi);
+	ULONG_PTR tracking_id = pxi.tracking;
+	packet_tracking_map[tracking_id].push_back(pxi);
 }
 
 void AddExtraAll(OutPacket *op) {
-	for (auto &pei : list_pei) {
-		// check tracking id (struct addr)
-		if (pei.tracking == (ULONG_PTR)op) {
+	ULONG_PTR tracking_id = (ULONG_PTR)op;
+	auto it = packet_tracking_map.find(tracking_id);
+	if (it != packet_tracking_map.end()) {
+		for (auto &pei : it->second) {
 			pei.id = packet_id_out; // fix
 			AddExtra(pei);
-			pei.tracking = 0;
 		}
+		packet_tracking_map.erase(it);
 	}
-	//DEBUG(L"list_st = " + std::to_wstring(list_pei.size()));
-
-	auto itr = list_pei.begin();
-	while (itr != list_pei.end()) {
-		if (itr->tracking == 0) {
-			itr = list_pei.erase(itr);
-		}
-		else {
-			itr++;
-		}
-	}
-	//DEBUG(L"list_rm = " + std::to_wstring(list_pei.size()));
+	//DEBUG(L"list_st = " + std::to_wstring(packet_tracking_map.size()));
 }
 
 void AddSendPacket(OutPacket *op, ULONG_PTR addr, bool &bBlock) {
 	AddExtraAll(op);
-	union {
-		PacketEditorMessage *pem;
-		BYTE *b;
-	};
 
-	b = new BYTE[sizeof(PacketEditorMessage) + op->encoded];
+	if (!g_BufferPool || !g_PacketQueue) {
+		return; // Queue not initialized
+	}
+
+	size_t total_size = sizeof(PacketEditorMessage) + op->encoded;
+	size_t buffer_index;
+	BYTE* b = g_BufferPool->Allocate(total_size, buffer_index);
 
 	if (!b) {
 		return;
 	}
+
+	union {
+		PacketEditorMessage *pem;
+		BYTE *pb;
+	};
+	pb = b;
 
 	pem->header = SENDPACKET;
 	pem->id = packet_id_out;
@@ -154,33 +153,29 @@ void AddSendPacket(OutPacket *op, ULONG_PTR addr, bool &bBlock) {
 	}
 #endif
 
-	if (!pc->Send(b, sizeof(PacketEditorMessage) + op->encoded)) {
-		RestartPipeClient();
-	}
-	else {
-		std::wstring wResponse;
-		pc->Recv(wResponse);
-		if (wResponse.compare(L"Block") == 0) {
-			bBlock = true;
-		}
-		else {
-			bBlock = false;
-		}
-	}
-
-	delete[] b;
+	// Queue with blocking response (needs block check)
+	bBlock = false;
+	g_PacketQueue->QueuePacketBlocking(b, total_size, buffer_index, bBlock);
 }
 
 void AddRecvPacket(InPacket *ip, ULONG_PTR addr, bool &bBlock) {
-	union {
-		PacketEditorMessage *pem;
-		BYTE *b;
-	};
+	if (!g_BufferPool || !g_PacketQueue) {
+		return; // Queue not initialized
+	}
 
-	b = new BYTE[sizeof(PacketEditorMessage) + ip->size];
+	size_t total_size = sizeof(PacketEditorMessage) + ip->size;
+	size_t buffer_index;
+	BYTE* b = g_BufferPool->Allocate(total_size, buffer_index);
+
 	if (!b) {
 		return;
 	}
+
+	union {
+		PacketEditorMessage *pem;
+		BYTE *pb;
+	};
+	pb = b;
 
 	pem->header = RECVPACKET;
 	pem->id = packet_id_in;
@@ -188,21 +183,9 @@ void AddRecvPacket(InPacket *ip, ULONG_PTR addr, bool &bBlock) {
 	pem->Binary.length = ip->size;
 	memcpy_s(pem->Binary.packet, ip->size, &ip->packet[4], ip->size);
 
-	if (!pc->Send(b, sizeof(PacketEditorMessage) + ip->size)) {
-		RestartPipeClient();
-	}
-	else {
-		std::wstring wResponse;
-		pc->Recv(wResponse);
-		if (wResponse.compare(L"Block") == 0) {
-			bBlock = true;
-		}
-		else {
-			bBlock = false;
-		}
-	}
-
-	delete[] b;
+	// Queue with blocking response (needs block check)
+	bBlock = false;
+	g_PacketQueue->QueuePacketBlocking(b, total_size, buffer_index, bBlock);
 }
 
 PipeClient *pc = NULL;

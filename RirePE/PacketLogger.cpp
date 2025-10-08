@@ -235,12 +235,9 @@ bool LoggerCommunicate(PipeServerThread& psh) {
 
 		if (pem.header == SENDPACKET) {
 			UpdateLogger(pem, bBlock);
-			if (bBlock) {
-				psh.Send(L"Block");
-			}
-			else {
-				psh.Send(L"OK");
-			}
+			// Binary response: 1 = Block, 0 = OK
+			BYTE response = bBlock ? 1 : 0;
+			psh.Send(&response, 1);
 			AddSendPacket(pem);
 			UpdateStatus(pem);
 			continue;
@@ -248,12 +245,9 @@ bool LoggerCommunicate(PipeServerThread& psh) {
 
 		if (pem.header == RECVPACKET) {
 			UpdateLogger(pem, bBlock);
-			if (bBlock) {
-				psh.Send(L"Block");
-			}
-			else {
-				psh.Send(L"OK");
-			}
+			// Binary response: 1 = Block, 0 = OK
+			BYTE response = bBlock ? 1 : 0;
+			psh.Send(&response, 1);
 			AddRecvPacket(pem);
 			continue;
 		}
