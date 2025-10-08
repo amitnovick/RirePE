@@ -148,29 +148,29 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="SimpleFile.cpp" />
-    <ClCompile Include="SimpleInjector.cpp" />
-    <ClCompile Include="SimpleMemoryAobScan.cpp" />
-    <ClCompile Include="SimpleMemoryCode.cpp" />
-    <ClCompile Include="SimpleGUIControl.cpp" />
-    <ClCompile Include="SimpleGUICallback.cpp" />
-    <ClCompile Include="SimpleGUIListView.cpp" />
-    <ClCompile Include="SimpleGUI.cpp" />
-    <ClCompile Include="SimpleMemory.cpp" />
-    <ClCompile Include="SimplePipeClient.cpp" />
-    <ClCompile Include="SimplePipeServer.cpp" />
-    <ClCompile Include="SimplePipeServerThread.cpp" />
-    <ClCompile Include="SimpleConfig.cpp" />
-    <ClCompile Include="Simple.cpp" />
+    <ClCompile Include="..\Simple\SimpleFile.cpp" />
+    <ClCompile Include="..\Simple\SimpleInjector.cpp" />
+    <ClCompile Include="..\Simple\SimpleMemoryAobScan.cpp" />
+    <ClCompile Include="..\Simple\SimpleMemoryCode.cpp" />
+    <ClCompile Include="..\Simple\SimpleGUIControl.cpp" />
+    <ClCompile Include="..\Simple\SimpleGUICallback.cpp" />
+    <ClCompile Include="..\Simple\SimpleGUIListView.cpp" />
+    <ClCompile Include="..\Simple\SimpleGUI.cpp" />
+    <ClCompile Include="..\Simple\SimpleMemory.cpp" />
+    <ClCompile Include="..\Simple\SimplePipeClient.cpp" />
+    <ClCompile Include="..\Simple\SimplePipeServer.cpp" />
+    <ClCompile Include="..\Simple\SimplePipeServerThread.cpp" />
+    <ClCompile Include="..\Simple\SimpleConfig.cpp" />
+    <ClCompile Include="..\Simple\Simple.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Simple.h" />
-    <ClInclude Include="SimpleConfig.h" />
-    <ClInclude Include="SimpleFile.h" />
-    <ClInclude Include="SimpleGUI.h" />
-    <ClInclude Include="SimpleInjector.h" />
-    <ClInclude Include="SimpleMemory.h" />
-    <ClInclude Include="SimplePipe.h" />
+    <ClInclude Include="..\Simple\Simple.h" />
+    <ClInclude Include="..\Simple\SimpleConfig.h" />
+    <ClInclude Include="..\Simple\SimpleFile.h" />
+    <ClInclude Include="..\Simple\SimpleGUI.h" />
+    <ClInclude Include="..\Simple\SimpleInjector.h" />
+    <ClInclude Include="..\Simple\SimpleMemory.h" />
+    <ClInclude Include="..\Simple\SimplePipe.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\.editorconfig" />
