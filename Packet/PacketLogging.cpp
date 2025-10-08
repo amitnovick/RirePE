@@ -273,14 +273,16 @@ bool SendPacketData(BYTE *bData, ULONG_PTR uLength) {
 }
 
 bool RecvPacketData(std::vector<BYTE> &vData) {
-	// Receive from pipe client (priority - local GUI response)
-	if (pc && pc->Recv(vData)) {
-		return true;
+	// ALWAYS prioritize pipe client response (RirePE.exe)
+	// Only read from pipe if it exists - don't try TCP as fallback
+	// because both destinations get the same packet and may both respond
+	if (pc) {
+		return pc->Recv(vData);
 	}
 
-	// Fallback to TCP client if pipe fails
-	if (g_UseTCP && RecvPacketDataTCP(vData)) {
-		return true;
+	// Only use TCP if pipe is not available
+	if (g_UseTCP) {
+		return RecvPacketDataTCP(vData);
 	}
 
 	return false;

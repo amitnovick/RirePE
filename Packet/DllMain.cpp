@@ -165,7 +165,10 @@ bool RunRirePE(HookSettings &hs) {
 
 	// Additionally start TCP client if enabled (allows both local GUI and remote monitoring)
 	if (g_UseTCP) {
-		StartTCPClient();
+		if (!StartTCPClient()) {
+			// TCP connection failed - disable TCP mode to prevent issues
+			g_UseTCP = false;
+		}
 	}
 
 	RunPacketSender();
