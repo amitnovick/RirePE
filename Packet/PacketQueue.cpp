@@ -1,4 +1,5 @@
 ﻿#include"../Share/Simple/Simple.h"
+#include"../RirePE/RirePE.h"
 #include"PacketQueue.h"
 #include"PacketLogging.h"
 
@@ -205,13 +206,24 @@ void AsyncPacketQueue::ProcessQueue() {
 			if (pc && pc->Send(qp.data, qp.size)) {
 				success = true;
 
-				if (qp.needs_response) {
-					// Read response for blocking packets
+				// Determine if this packet type expects a response
+				// SENDPACKET and RECVPACKET always get responses from RirePE.exe
+				bool expects_response = false;
+				if (qp.size >= sizeof(PacketEditorMessage)) {
+					PacketEditorMessage* pem = (PacketEditorMessage*)qp.data;
+					expects_response = (pem->header == SENDPACKET || pem->header == RECVPACKET);
+				}
+
+				// Always read response if server sends one (to keep pipe in sync)
+				if (expects_response) {
 					BYTE response = 0;
 					std::vector<BYTE> vData;
 					if (pc->Recv(vData) && vData.size() >= 1) {
 						response = vData[0];
-						qp.block_result = (response == 1);
+						// Only store result if caller is waiting
+						if (qp.needs_response) {
+							qp.block_result = (response == 1);
+						}
 					}
 				}
 			} else {
