@@ -138,11 +138,7 @@ bool RunRirePE(HookSettings &hs) {
 	std::wstring wDir;
 	if (GetDir(wDir, hs.hinstDLL)) {
 		std::wstring param = std::to_wstring(target_pid) + L" MapleStoryClass";
-#ifndef _WIN64
 		ShellExecuteW(NULL, NULL, (wDir + L"\\RirePE.exe").c_str(), param.c_str(), wDir.c_str(), SW_SHOW);
-#else
-		ShellExecuteW(NULL, NULL, (wDir + L"\\RirePE64.exe").c_str(), param.c_str(), wDir.c_str(), SW_SHOW);
-#endif
 	}
 
 	StartPipeClient();
