@@ -55,118 +55,273 @@ This plan outlines the steps to remove all 64-bit projects (RirePE64, Packet64, 
 
 ## Refactoring Strategy
 
-The refactoring must be done gradually to ensure the 32-bit builds continue to work. The key insight is:
+**Key Principle:** Each phase must be independently buildable. After completing any phase, the entire solution must build successfully without errors.
 
-- **Source code lives in 64-bit directories for Share projects**
-- **Source code lives in 32-bit directories for main projects (RirePE, Packet)**
+The refactoring uses an **atomic update per component** approach:
+- Each phase completely migrates one component (move files + update all references)
+- Both 32-bit and 64-bit projects remain buildable until we explicitly remove them
+- We move files and update references in the same phase to maintain consistency
 
-### Phase 1: Prepare Share Projects (Move Source Files)
+### Phase 1: Migrate Share/Simple Component
 
-**Goal:** Move source files from 64-bit directories to 32-bit directories or shared locations.
+**Goal:** Move Simple source files and update all references atomically.
 
-#### Step 1.1: Refactor Share/Simple
-- Create or verify Simple/ directory has all source files (currently in Simple64/)
-- Move all .cpp/.h files from Simple64/ to Simple/
-- Update Simple/Simple.vcxproj to reference local files instead of ../Simple64/
-- Update Simple64/Simple64.vcxproj to reference ../Simple/ files (temporarily)
-- Test build for both Simple and Simple64
+**Status Before:** Simple64/ has source, Simple/ references it
+**Status After:** Simple/ has source, Simple64/ references it (reverse)
 
-#### Step 1.2: Refactor Share/Hook/Hook
-- Move SimpleHook.cpp/h from Hook64/ to Hook/
-- Update Hook/Hook.vcxproj to reference local files
-- Update Hook64/Hook64.vcxproj to reference ../Hook/ files (temporarily)
-- Test build
+#### Step 1.1: Move source files
+```bash
+cd Share/Simple/
+# Move all source files from Simple64/ to Simple/
+mv Simple64/*.cpp Simple/
+mv Simple64/*.h Simple/
+```
 
-#### Step 1.3: Refactor Share/Hook/Zycore
-- Move all Zycore source files from Zycore64/Zycore/ to Zycore/
-- Update Zycore/Zycore.vcxproj to reference local files
-- Update Zycore64/Zycore64.vcxproj to reference ../Zycore/ files (temporarily)
-- Test build
+#### Step 1.2: Update Simple/Simple.vcxproj
+Replace all file references:
+- Change: `<ClInclude Include="..\Simple64\Simple.h" />`
+- To: `<ClInclude Include="Simple.h" />`
+- Repeat for all .h and .cpp files (lines 22-44)
 
-#### Step 1.4: Refactor Share/Hook/Zydis
-- Move all Zydis source files from Zydis64/Zydis/ to Zydis/
-- Update Zydis/Zydis.vcxproj to reference local files
-- Update include directories to point to ../Zycore/ and ../Zydis/
-- Update Zydis64/Zydis64.vcxproj to reference ../Zydis/ files (temporarily)
-- Test build
+#### Step 1.3: Update Simple64/Simple64.vcxproj
+Add references to ../Simple/ files:
+- Change: `<ClInclude Include="Simple.h" />`
+- To: `<ClInclude Include="..\Simple\Simple.h" />`
+- Repeat for all files
 
-**Verification:** Build Share/Hook/Hook.sln and Share/Simple/Simple.sln for Win32 configuration
+#### Step 1.4: Test builds
+```bash
+# Build 32-bit
+msbuild Simple/Simple.vcxproj /p:Configuration=Release /p:Platform=Win32
+# Build 64-bit (should still work)
+msbuild Simple64/Simple64.vcxproj /p:Configuration=Release /p:Platform=x64
+```
 
-### Phase 2: Update Include Directories in 32-bit Projects
+**Verification:** Both Simple.sln Win32 and x64 configurations build successfully
+**Commit:** `git commit -m "Phase 1: Migrate Share/Simple component"`
 
-**Goal:** Replace all references to 64-bit directories with 32-bit directories.
+### Phase 2: Migrate Share/Hook/Hook Component
 
-#### Step 2.1: Update Hook/Hook.vcxproj
-- Change `<AdditionalIncludeDirectories>../Zydis64;../Zycore64</AdditionalIncludeDirectories>`
-- To: `<AdditionalIncludeDirectories>../Zydis;../Zycore</AdditionalIncludeDirectories>`
+**Goal:** Move Hook source files and update all references atomically.
 
-#### Step 2.2: Update Zycore/Zycore.vcxproj
-- Change `<AdditionalIncludeDirectories>../Zycore64</AdditionalIncludeDirectories>`
-- To: `<AdditionalIncludeDirectories>./</AdditionalIncludeDirectories>` or remove
+**Status Before:** Hook64/ has SimpleHook source, Hook/ references it
+**Status After:** Hook/ has SimpleHook source, Hook64/ references it
 
-#### Step 2.3: Update Zydis/Zydis.vcxproj
-- Change `<AdditionalIncludeDirectories>../Zycore64;../Zydis64;../Zydis64/Zydis</AdditionalIncludeDirectories>`
+#### Step 2.1: Move source files
+```bash
+cd Share/Hook/
+mv Hook64/SimpleHook.cpp Hook/
+mv Hook64/SimpleHook.h Hook/
+```
+
+#### Step 2.2: Update Hook/Hook.vcxproj
+- Line 151: Change `<ClCompile Include="..\Hook64\SimpleHook.cpp" />`
+  To: `<ClCompile Include="SimpleHook.cpp" />`
+- Line 154: Change `<ClInclude Include="..\Hook64\SimpleHook.h" />`
+  To: `<ClInclude Include="SimpleHook.h" />`
+
+#### Step 2.3: Update Hook64/Hook64.vcxproj
+- Line 156: Change `<ClCompile Include="SimpleHook.cpp" />`
+  To: `<ClCompile Include="..\Hook\SimpleHook.cpp" />`
+- Line 159: Change `<ClInclude Include="SimpleHook.h" />`
+  To: `<ClInclude Include="..\Hook\SimpleHook.h" />`
+
+#### Step 2.4: Test builds
+```bash
+msbuild Hook/Hook.vcxproj /p:Configuration=Release /p:Platform=Win32
+msbuild Hook64/Hook64.vcxproj /p:Configuration=Release /p:Platform=x64
+```
+
+**Verification:** Both Hook configurations build successfully
+**Commit:** `git commit -m "Phase 2: Migrate Share/Hook/Hook component"`
+
+### Phase 3: Migrate Share/Hook/Zycore Component
+
+**Goal:** Move Zycore source files and update all references atomically.
+
+#### Step 3.1: Move source directory
+```bash
+cd Share/Hook/
+# Move the Zycore source subdirectory
+mv Zycore64/Zycore/* Zycore/
+# Keep Zycore64/ZycoreExportConfig.h separate
+mv Zycore64/ZycoreExportConfig.h Zycore/
+```
+
+#### Step 3.2: Update Zycore/Zycore.vcxproj
+Replace all file references (lines 22-54):
+- Change: `<ClInclude Include="..\Zycore64\ZycoreExportConfig.h" />`
+- To: `<ClInclude Include="ZycoreExportConfig.h" />`
+- Change: `<ClInclude Include="..\Zycore64\Zycore\Allocator.h" />`
+- To: `<ClInclude Include="Zycore\Allocator.h" />`
+- Repeat for all source files
+
+Update include directory (line 172):
+- Change: `<AdditionalIncludeDirectories>../Zycore64</AdditionalIncludeDirectories>`
+- To: `<AdditionalIncludeDirectories>./</AdditionalIncludeDirectories>`
+
+#### Step 3.3: Update Zycore64/Zycore64.vcxproj
+Add references pointing back to ../Zycore/:
+- Change all file paths from local to `../Zycore/...`
+- Update include directories similarly
+
+#### Step 3.4: Test builds
+```bash
+msbuild Zycore/Zycore.vcxproj /p:Configuration=Release /p:Platform=Win32
+msbuild Zycore64/Zycore64.vcxproj /p:Configuration=Release /p:Platform=x64
+```
+
+**Verification:** Both Zycore configurations build successfully
+**Commit:** `git commit -m "Phase 3: Migrate Share/Hook/Zycore component"`
+
+### Phase 4: Migrate Share/Hook/Zydis Component and Update Include Paths
+
+**Goal:** Move Zydis source files and update ALL include directory references.
+
+#### Step 4.1: Move source directory
+```bash
+cd Share/Hook/
+mv Zydis64/Zydis/* Zydis/
+mv Zydis64/ZydisExportConfig.h Zydis/
+```
+
+#### Step 4.2: Update Zydis/Zydis.vcxproj
+- Update all file references from `Zydis64/...` to local paths
+- Line 138: Change `<AdditionalIncludeDirectories>../Zycore64;../Zydis64;../Zydis64/Zydis</AdditionalIncludeDirectories>`
 - To: `<AdditionalIncludeDirectories>../Zycore;./;./Zydis</AdditionalIncludeDirectories>`
 
-**Verification:** Build 32-bit configurations successfully
+#### Step 4.3: Update Zydis64/Zydis64.vcxproj
+- Update file references to point to ../Zydis/
+- Update include directories
 
-### Phase 3: Clean Up Conditional 64-bit Code
+#### Step 4.4: Update Hook/Hook.vcxproj (Critical!)
+- Line 120: Change `<AdditionalIncludeDirectories>../Zydis64;../Zycore64</AdditionalIncludeDirectories>`
+- To: `<AdditionalIncludeDirectories>../Zydis;../Zycore</AdditionalIncludeDirectories>`
 
-**Goal:** Remove _WIN64 conditional code that references 64-bit executables/DLLs.
+#### Step 4.5: Test builds
+```bash
+# Test entire Hook solution
+msbuild Hook.sln /p:Configuration=Release /p:Platform=Win32
+msbuild Hook.sln /p:Configuration=Release /p:Platform=x64
+```
 
-#### Step 3.1: Update RirePE/RirePE.h
-- Remove or update lines 9 and 15 that define RirePE64 and Packet64 names
-- Keep only 32-bit names
+**Verification:** All Hook solution projects build for both platforms
+**Commit:** `git commit -m "Phase 4: Migrate Zydis component and update all include paths"`
 
-#### Step 3.2: Update Packet/DllMain.cpp
-- Remove #ifdef _WIN64 blocks (lines 141-145)
-- Keep only the 32-bit RirePE.exe launch code
+### Phase 5: Clean Up Conditional 64-bit Code in Main Projects
 
-#### Step 3.3: Clean up conditional compilation
-- Search for `#ifdef _WIN64` blocks in Packet source files
-- Review each block to determine if it's architecture-specific or project-specific
-- Remove project-specific 64-bit code
-- Keep architecture-specific code (pointer sizes, etc.)
+**Goal:** Remove _WIN64 conditional code that references 64-bit executables/DLLs. This prepares for removing the 64-bit projects.
 
-**Verification:** Code review and grep for remaining 64-bit references
+#### Step 5.1: Update RirePE/RirePE.h
+Remove 64-bit exe/dll name definitions:
+```cpp
+// Before:
+#ifndef _WIN64
+#define EXE_NAME L"RirePE"
+#else
+#define EXE_NAME L"RirePE64"  // Remove this
+#endif
 
-### Phase 4: Remove 64-bit Projects from Solutions
+#ifndef _WIN64
+#define DLL_NAME L"Packet"
+#else
+#define DLL_NAME L"Packet64"  // Remove this
+#endif
 
-**Goal:** Remove all 64-bit project references from solution files.
+// After:
+#define EXE_NAME L"RirePE"
+#define DLL_NAME L"Packet"
+```
 
-#### Step 4.1: Update RirePE.sln
-- Remove RirePE64 project (lines 16-17)
-- Remove Packet64 project (lines 14-15)
-- Remove Packet_TENVI project (lines 20-21)
-- Remove corresponding GlobalSection entries
-- Remove x64 platform configurations from 32-bit projects (keep only Win32)
+#### Step 5.2: Update Packet/DllMain.cpp
+Remove 64-bit launch code (lines 141-145):
+```cpp
+// Before:
+#ifndef _WIN64
+    ShellExecuteW(NULL, NULL, (wDir + L"\\RirePE.exe").c_str(), ...);
+#else
+    ShellExecuteW(NULL, NULL, (wDir + L"\\RirePE64.exe").c_str(), ...);  // Remove
+#endif
 
-#### Step 4.2: Update Share/Hook/Hook.sln
-- Remove Hook64 project
-- Remove Zycore64 project
-- Remove Zydis64 project
+// After:
+    ShellExecuteW(NULL, NULL, (wDir + L"\\RirePE.exe").c_str(), ...);
+```
+
+**Note:** Keep architecture-specific `#ifdef _WIN64` blocks that handle pointer sizes, data types, etc. Only remove project-specific references.
+
+#### Step 5.3: Review remaining _WIN64 usage
+```bash
+grep -n "#ifdef _WIN64" Packet/*.cpp Packet/*.h RirePE/*.cpp RirePE/*.h
+```
+Review each occurrence - keep architecture code, remove project references.
+
+#### Step 5.4: Test builds
+```bash
+msbuild RirePE.sln /p:Configuration=Release /p:Platform=Win32
+```
+
+**Verification:** 32-bit builds succeed, no references to RirePE64/Packet64 executables
+**Commit:** `git commit -m "Phase 5: Remove 64-bit project references from source code"`
+
+### Phase 6: Remove 64-bit Projects from Solutions
+
+**Goal:** Remove all 64-bit project entries from solution files. After this phase, only 32-bit projects remain.
+
+#### Step 6.1: Update RirePE.sln
+Remove projects:
+- Lines 14-15: Remove Packet64 project
+- Lines 16-17: Remove RirePE64 project
+- Lines 20-21: Remove Packet_TENVI project
+
+Remove from GlobalSection(ProjectConfigurationPlatforms):
+- Remove all lines containing `{0390B5AE-2948-4BCD-BD23-57F44A72E04D}` (Packet64)
+- Remove all lines containing `{62E49245-74FD-49C2-8E41-285F5FF2606D}` (RirePE64)
+- Remove all lines containing `{92BCAA26-D741-4637-9923-5B5E4BE3D704}` (Packet_TENVI)
+
+Remove from GlobalSection(NestedProjects):
+- Remove corresponding lines
+
+Remove x64 platform configurations from remaining projects:
+- Keep only `Debug|x86` and `Release|x86` in GlobalSection(SolutionConfigurationPlatforms)
+- Remove all `Debug|x64` and `Release|x64` lines from remaining projects
+
+#### Step 6.2: Update Share/Hook/Hook.sln
+Remove projects:
+- Lines 8-9: Remove Hook64
+- Lines 14-15: Remove Zycore64
+- Lines 18-19: Remove Zydis64
 - Remove corresponding GlobalSection entries
 - Remove x64 platform configurations
 
-#### Step 4.3: Update Share/Simple/Simple.sln
-- Remove Simple64 project
+#### Step 6.3: Update Share/Simple/Simple.sln
+Remove project:
+- Remove Simple64 project entry
 - Remove corresponding GlobalSection entries
 - Remove x64 platform configurations
 
-**Verification:** Solutions load correctly in Visual Studio, all remaining projects build
+#### Step 6.4: Test builds
+```bash
+# Open and build solutions
+msbuild RirePE.sln /p:Configuration=Release /p:Platform=Win32
+msbuild Share/Hook/Hook.sln /p:Configuration=Release /p:Platform=Win32
+msbuild Share/Simple/Simple.sln /p:Configuration=Release /p:Platform=Win32
+```
 
-### Phase 5: Delete 64-bit Project Directories
+**Verification:** All solutions load in Visual Studio, only 32-bit projects visible, all build successfully
+**Commit:** `git commit -m "Phase 6: Remove 64-bit projects from solution files"`
 
-**Goal:** Physically remove 64-bit project directories.
+### Phase 7: Delete 64-bit Project Directories and Files
 
-#### Step 5.1: Remove main 64-bit projects
+**Goal:** Physically remove 64-bit project directories and related files.
+
+#### Step 7.1: Remove main 64-bit projects
 ```bash
 rm -rf RirePE64/
 rm -rf Packet64/
 rm -rf Packet_TENVI/
 ```
 
-#### Step 5.2: Remove Share 64-bit projects
+#### Step 7.2: Remove Share 64-bit projects
 ```bash
 rm -rf Share/Hook/Hook64/
 rm -rf Share/Hook/Zycore64/
@@ -174,30 +329,51 @@ rm -rf Share/Hook/Zydis64/
 rm -rf Share/Simple/Simple64/
 ```
 
-#### Step 5.3: Remove build event scripts (if 64-bit specific)
-- Check and potentially remove:
-  - Share/Hook/BuildEvent64.bat
-  - Share/Simple/BuildEvent64.bat
+#### Step 7.3: Remove 64-bit build scripts
+```bash
+rm Share/Hook/BuildEvent64.bat
+rm Share/Simple/BuildEvent64.bat
+```
 
-**Verification:** Full solution builds, no broken file references
+#### Step 7.4: Test full clean build
+```bash
+# Clean all outputs
+git clean -fdx
 
-### Phase 6: Update Documentation and Configuration
+# Rebuild everything
+msbuild RirePE.sln /p:Configuration=Release /p:Platform=Win32 /t:Rebuild
+```
+
+**Verification:** Full solution builds from clean state, no broken file references
+**Commit:** `git commit -m "Phase 7: Delete 64-bit project directories"`
+
+### Phase 8: Update Documentation
 
 **Goal:** Update all documentation to reflect 32-bit only architecture.
 
-#### Step 6.1: Update README files
-- Update ARCHITECTURE.md to reflect new structure
-- Update build instructions
-- Update any references to 64-bit versions
+#### Step 8.1: Update ARCHITECTURE.md
+- Remove references to 64-bit builds
+- Update project structure diagrams
+- Document new file locations
 
-#### Step 6.2: Update .gitignore
-- Remove 64-bit specific build output directories if present
+#### Step 8.2: Update README.md
+- Update build instructions (remove 64-bit steps)
+- Update system requirements
 
-#### Step 6.3: Update CI/CD (if applicable)
-- Check .github/workflows/ for 64-bit build configurations
-- Update to build only 32-bit versions
+#### Step 8.3: Update .gitignore
+- Remove 64-bit specific entries if present:
+  - `/x64/`
+  - `/Release64/`
+  - etc.
+
+#### Step 8.4: Check CI/CD workflows
+```bash
+cat .github/workflows/*.yml
+```
+- Remove or update 64-bit build steps
 
 **Verification:** Documentation review, test build from clean checkout
+**Commit:** `git commit -m "Phase 8: Update documentation for 32-bit only"`
 
 ## Risk Mitigation
 
@@ -222,14 +398,18 @@ If issues arise:
 
 ## Estimated Timeline
 
-- **Phase 1:** 2-3 hours (file moves, vcxproj updates, testing)
-- **Phase 2:** 1 hour (include directory updates, testing)
-- **Phase 3:** 1-2 hours (code cleanup, testing)
-- **Phase 4:** 1 hour (solution file updates)
-- **Phase 5:** 30 minutes (directory deletion)
-- **Phase 6:** 1 hour (documentation updates)
+- **Phase 1 (Simple):** 30-45 minutes (move files, update 2 vcxproj, test)
+- **Phase 2 (Hook):** 20-30 minutes (move files, update 2 vcxproj, test)
+- **Phase 3 (Zycore):** 45-60 minutes (move directory, update many file refs, test)
+- **Phase 4 (Zydis):** 45-60 minutes (move directory, update refs + includes, test)
+- **Phase 5 (Code cleanup):** 30-45 minutes (remove conditional code, test)
+- **Phase 6 (Solutions):** 45-60 minutes (edit 3 .sln files, test all)
+- **Phase 7 (Delete):** 15-20 minutes (rm directories, clean build)
+- **Phase 8 (Docs):** 30-45 minutes (update documentation)
 
-**Total:** 6.5-8.5 hours
+**Total:** 4-5.5 hours
+
+Each phase is independently testable and can be done in a separate session.
 
 ## Success Criteria
 
@@ -244,10 +424,16 @@ If issues arise:
 ## Notes
 
 ### Why This Order?
-1. **Phase 1 first** because we need source files accessible to 32-bit projects
-2. **Phase 2 second** to fix include paths before removing projects
-3. **Phase 3 third** to clean conditional code before solution changes
-4. **Phases 4-6** are cleanup that won't affect builds
+1. **Phases 1-4:** Migrate components atomically - each phase moves files and updates ALL references so both 32/64-bit builds work
+2. **Phase 5:** Clean source code to prepare for removing 64-bit projects
+3. **Phase 6:** Remove project references (safe because source is already migrated)
+4. **Phases 7-8:** Physical cleanup and documentation
+
+### Key Design Decision
+We move source files from 64-bit to 32-bit directories (not to a shared location) because:
+- 32-bit is the primary target going forward
+- Simpler project structure (no extra Common/ directory)
+- Files live with the project that uses them
 
 ### Alternative Approach
-If the team prefers to keep source code in separate directories (not colocated with 32-bit projects), consider creating a `Share/Common/` directory structure instead of moving files into 32-bit project directories.
+If you prefer a shared location, create `Share/Hook/Common/` and `Share/Simple/Common/` directories instead of moving to the 32-bit project folders. Both projects would then reference the Common location.
