@@ -135,7 +135,7 @@
       <PreprocessorDefinitions>ZYCORE_STATIC_DEFINE;ZYDIS_STATIC_DEFINE;ZYDIS_EXPORTS;WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>../;../Zydis64;../Zydis64/Zydis</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../;./</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -182,7 +182,7 @@
     <ClInclude Include="Status.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="Zydis.h" />
-    <ClInclude Include="ZydisExportConfig.h" />
+    <ClInclude Include="..\ZydisExportConfig.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
