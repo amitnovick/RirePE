@@ -45,6 +45,24 @@ bool LoadPacketConfig(HINSTANCE hinstDLL) {
 		hs.enable_blocking = true;
 		g_EnableBlocking = true;
 	}
+	// TCP mode (default: false, uses named pipes)
+	extern bool g_UseTCP;
+	extern std::string g_TCPHost;
+	extern int g_TCPPort;
+	std::wstring wUseTCP;
+	if (conf.Read(DLL_NAME, L"USE_TCP", wUseTCP) && _wtoi(wUseTCP.c_str())) {
+		g_UseTCP = true;
+		// Read TCP host
+		std::wstring wTCPHost;
+		if (conf.Read(DLL_NAME, L"TCP_HOST", wTCPHost)) {
+			g_TCPHost = std::string(wTCPHost.begin(), wTCPHost.end());
+		}
+		// Read TCP port
+		std::wstring wTCPPort;
+		if (conf.Read(DLL_NAME, L"TCP_PORT", wTCPPort)) {
+			g_TCPPort = _wtoi(wTCPPort.c_str());
+		}
+	}
 	// high version mode (CInPacket), TODO
 	std::wstring wHighVersionMode;
 	if (conf.Read(DLL_NAME, L"HIGH_VERSION_MODE", wHighVersionMode) && _wtoi(wHighVersionMode.c_str())) {
@@ -135,13 +153,21 @@ std::wstring GetPipeNameSender() {
 }
 
 bool RunRirePE(HookSettings &hs) {
-	std::wstring wDir;
-	if (GetDir(wDir, hs.hinstDLL)) {
-		std::wstring param = std::to_wstring(target_pid) + L" MapleStoryClass";
-		ShellExecuteW(NULL, NULL, (wDir + L"\\RirePE.exe").c_str(), param.c_str(), wDir.c_str(), SW_SHOW);
+	extern bool g_UseTCP;
+
+	// Only launch RirePE.exe if using pipes (not TCP)
+	if (!g_UseTCP) {
+		std::wstring wDir;
+		if (GetDir(wDir, hs.hinstDLL)) {
+			std::wstring param = std::to_wstring(target_pid) + L" MapleStoryClass";
+			ShellExecuteW(NULL, NULL, (wDir + L"\\RirePE.exe").c_str(), param.c_str(), wDir.c_str(), SW_SHOW);
+		}
+		StartPipeClient();
+	} else {
+		// TCP mode - connect to remote server
+		StartTCPClient();
 	}
 
-	StartPipeClient();
 	RunPacketSender();
 	return true;
 }

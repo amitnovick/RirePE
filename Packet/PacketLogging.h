@@ -39,5 +39,15 @@ extern CRITICAL_SECTION cs;
 bool StartPipeClient();
 bool RestartPipeClient();
 
+// TCP Client support
+class TCPClient;
+extern TCPClient *tc;
+bool StartTCPClient();
+bool RestartTCPClient();
+
+// Abstract interface for sending packets (works with both pipe and TCP)
+bool SendPacketData(BYTE *bData, ULONG_PTR uLength);
+bool RecvPacketData(std::vector<BYTE> &vData);
+
 
 #endif

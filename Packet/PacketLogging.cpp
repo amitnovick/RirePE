@@ -1,5 +1,6 @@
 ﻿#include"PacketLogging.h"
 #include"PacketQueue.h"
+#include"../Share/Simple/SimpleTCP.h"
 
 //DWORD packet_id_out = (GetCurrentProcessId() << 16); // 偶数
 //DWORD packet_id_in = (GetCurrentProcessId() << 16) + 1; // 奇数
@@ -231,6 +232,12 @@ void AddRecvPacket(InPacket *ip, ULONG_PTR addr, bool &bBlock) {
 }
 
 PipeClient *pc = NULL;
+TCPClient *tc = NULL;
+
+// Use TCP mode flag (set from config)
+bool g_UseTCP = false;
+std::string g_TCPHost = "127.0.0.1";
+int g_TCPPort = 9999;
 
 bool StartPipeClient() {
 	InitTracking();
@@ -244,4 +251,37 @@ bool RestartPipeClient() {
 		pc = NULL;
 	}
 	return StartPipeClient();
+}
+
+bool StartTCPClient() {
+	InitTracking();
+	tc = new TCPClient(g_TCPHost, g_TCPPort);
+	return tc->Run();
+}
+
+bool RestartTCPClient() {
+	if (tc) {
+		delete tc;
+		tc = NULL;
+	}
+	return StartTCPClient();
+}
+
+// Abstract send/recv functions that work with both pipe and TCP
+bool SendPacketData(BYTE *bData, ULONG_PTR uLength) {
+	if (g_UseTCP && tc) {
+		return tc->Send(bData, uLength);
+	} else if (pc) {
+		return pc->Send(bData, uLength);
+	}
+	return false;
+}
+
+bool RecvPacketData(std::vector<BYTE> &vData) {
+	if (g_UseTCP && tc) {
+		return tc->Recv(vData);
+	} else if (pc) {
+		return pc->Recv(vData);
+	}
+	return false;
 }

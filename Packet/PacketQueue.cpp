@@ -201,9 +201,9 @@ void AsyncPacketQueue::ProcessQueue() {
 
 			processed++;
 
-			// Send packet through pipe
+			// Send packet through pipe or TCP
 			bool success = false;
-			if (pc && pc->Send(qp.data, qp.size)) {
+			if (SendPacketData(qp.data, qp.size)) {
 				success = true;
 
 				// Determine if this packet type expects a response
@@ -214,11 +214,11 @@ void AsyncPacketQueue::ProcessQueue() {
 					expects_response = (pem->header == SENDPACKET || pem->header == RECVPACKET);
 				}
 
-				// Always read response if server sends one (to keep pipe in sync)
+				// Always read response if server sends one (to keep communication in sync)
 				if (expects_response) {
 					BYTE response = 0;
 					std::vector<BYTE> vData;
-					if (pc->Recv(vData) && vData.size() >= 1) {
+					if (RecvPacketData(vData) && vData.size() >= 1) {
 						response = vData[0];
 						// Only store result if caller is waiting
 						if (qp.needs_response) {
@@ -227,8 +227,13 @@ void AsyncPacketQueue::ProcessQueue() {
 					}
 				}
 			} else {
-				// Pipe failed, try restart (but don't block queue)
-				RestartPipeClient();
+				// Connection failed, try restart (but don't block queue)
+				extern bool g_UseTCP;
+				if (g_UseTCP) {
+					RestartTCPClient();
+				} else {
+					RestartPipeClient();
+				}
 			}
 
 			// Free buffer
