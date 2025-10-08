@@ -6,8 +6,11 @@
 #include"PacketLogging.h"
 #include<vector>
 
-// TCP client instance (defined in PacketLogging.cpp)
-TCPClient *tc = NULL;
+// TCP server instance and connected client thread
+TCPServer *ts = NULL;
+TCPServerThread *current_client = NULL;
+CRITICAL_SECTION tcp_client_cs;
+bool tcp_cs_initialized = false;
 
 // TCP configuration (defined in PacketLogging.cpp)
 extern bool g_UseTCP;
@@ -17,31 +20,70 @@ extern int g_TCPPort;
 // Initialize tracking (defined in PacketLogging.cpp)
 extern void InitTracking();
 
+// Communication callback for TCP server - handles each client connection
+bool TCPCommunicate(TCPServerThread &client) {
+	// Store the current client connection
+	EnterCriticalSection(&tcp_client_cs);
+	current_client = &client;
+	LeaveCriticalSection(&tcp_client_cs);
+
+	// Keep connection alive - the worker thread will use this connection
+	// to send/recv data. Connection stays open until client disconnects.
+	while (true) {
+		Sleep(100); // Keep thread alive
+	}
+
+	// Client disconnected
+	EnterCriticalSection(&tcp_client_cs);
+	current_client = NULL;
+	LeaveCriticalSection(&tcp_client_cs);
+
+	return true;
+}
+
 bool StartTCPClient() {
 	InitTracking();
-	tc = new TCPClient(g_TCPHost, g_TCPPort);
-	return tc->Run();
+
+	if (!tcp_cs_initialized) {
+		InitializeCriticalSection(&tcp_client_cs);
+		tcp_cs_initialized = true;
+	}
+
+	// Create TCP server (note: g_TCPPort is used, g_TCPHost is ignored for server)
+	ts = new TCPServer(g_TCPPort);
+	ts->SetCommunicate(TCPCommunicate);
+	return ts->Run();
 }
 
 bool RestartTCPClient() {
-	if (tc) {
-		delete tc;
-		tc = NULL;
+	EnterCriticalSection(&tcp_client_cs);
+	current_client = NULL;
+	LeaveCriticalSection(&tcp_client_cs);
+
+	if (ts) {
+		delete ts;
+		ts = NULL;
 	}
 	return StartTCPClient();
 }
 
 // Abstract send/recv functions (called from PacketQueue)
 bool SendPacketDataTCP(BYTE *bData, ULONG_PTR uLength) {
-	if (tc) {
-		return tc->Send(bData, uLength);
+	EnterCriticalSection(&tcp_client_cs);
+	bool success = false;
+	if (current_client) {
+		success = current_client->Send(bData, uLength);
 	}
-	return false;
+	LeaveCriticalSection(&tcp_client_cs);
+	return success;
 }
 
 bool RecvPacketDataTCP(std::vector<BYTE> &vData) {
-	if (tc) {
-		return tc->Recv(vData);
+	EnterCriticalSection(&tcp_client_cs);
+	bool success = false;
+	if (current_client) {
+		success = current_client->Recv(vData);
 	}
-	return false;
+	LeaveCriticalSection(&tcp_client_cs);
+	return success;
 }

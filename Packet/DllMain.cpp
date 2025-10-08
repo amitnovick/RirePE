@@ -163,12 +163,10 @@ bool RunRirePE(HookSettings &hs) {
 	}
 	StartPipeClient();
 
-	// Additionally start TCP client if enabled (allows both local GUI and remote monitoring)
+	// Additionally start TCP server if enabled (allows both local GUI and remote monitoring)
 	if (g_UseTCP) {
-		if (!StartTCPClient()) {
-			// TCP connection failed - disable TCP mode to prevent issues
-			g_UseTCP = false;
-		}
+		StartTCPClient(); // This now starts a TCP server (function name kept for compatibility)
+		// Server starts in background - clients can connect anytime
 	}
 
 	RunPacketSender();
