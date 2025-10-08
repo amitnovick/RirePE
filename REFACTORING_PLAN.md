@@ -153,17 +153,18 @@ Replace all file references (lines 22-54):
 - Change: `<ClInclude Include="..\Zycore64\ZycoreExportConfig.h" />`
 - To: `<ClInclude Include="ZycoreExportConfig.h" />`
 - Change: `<ClInclude Include="..\Zycore64\Zycore\Allocator.h" />`
-- To: `<ClInclude Include="Zycore\Allocator.h" />`
+- To: `<ClInclude Include="Allocator.h" />`
 - Repeat for all source files
 
 Update include directory (line 172):
 - Change: `<AdditionalIncludeDirectories>../Zycore64</AdditionalIncludeDirectories>`
-- To: `<AdditionalIncludeDirectories>./</AdditionalIncludeDirectories>`
+- To: `<AdditionalIncludeDirectories>../</AdditionalIncludeDirectories>`
+- **Note:** Zycore source files use `#include <Zycore/Allocator.h>` pattern, so include path must point to parent directory
 
 #### Step 3.3: Update Zycore64/Zycore64.vcxproj
 Add references pointing back to ../Zycore/:
-- Change all file paths from local to `../Zycore/...`
-- Update include directories similarly
+- Change all file paths from `..Zycore\` to `../Zycore/...`
+- Update include directory from `../Zycore` to `../`
 
 #### Step 3.4: Test builds
 ```bash
