@@ -19,39 +19,39 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Zycore\Allocator.c" />
-    <ClCompile Include="Zycore\API\Memory.c" />
-    <ClCompile Include="Zycore\API\Synchronization.c" />
-    <ClCompile Include="Zycore\API\Terminal.c" />
-    <ClCompile Include="Zycore\API\Thread.c" />
-    <ClCompile Include="Zycore\ArgParse.c" />
-    <ClCompile Include="Zycore\Bitset.c" />
-    <ClCompile Include="Zycore\Format.c" />
-    <ClCompile Include="Zycore\List.c" />
-    <ClCompile Include="Zycore\String.c" />
-    <ClCompile Include="Zycore\Vector.c" />
-    <ClCompile Include="Zycore\Zycore.c" />
+    <ClCompile Include="..\Zycore\Allocator.c" />
+    <ClCompile Include="..\Zycore\API\Memory.c" />
+    <ClCompile Include="..\Zycore\API\Synchronization.c" />
+    <ClCompile Include="..\Zycore\API\Terminal.c" />
+    <ClCompile Include="..\Zycore\API\Thread.c" />
+    <ClCompile Include="..\Zycore\ArgParse.c" />
+    <ClCompile Include="..\Zycore\Bitset.c" />
+    <ClCompile Include="..\Zycore\Format.c" />
+    <ClCompile Include="..\Zycore\List.c" />
+    <ClCompile Include="..\Zycore\String.c" />
+    <ClCompile Include="..\Zycore\Vector.c" />
+    <ClCompile Include="..\Zycore\Zycore.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ZycoreExportConfig.h" />
-    <ClInclude Include="Zycore\Allocator.h" />
-    <ClInclude Include="Zycore\API\Memory.h" />
-    <ClInclude Include="Zycore\API\Synchronization.h" />
-    <ClInclude Include="Zycore\API\Terminal.h" />
-    <ClInclude Include="Zycore\API\Thread.h" />
-    <ClInclude Include="Zycore\ArgParse.h" />
-    <ClInclude Include="Zycore\Bitset.h" />
-    <ClInclude Include="Zycore\Comparison.h" />
-    <ClInclude Include="Zycore\Defines.h" />
-    <ClInclude Include="Zycore\Format.h" />
-    <ClInclude Include="Zycore\LibC.h" />
-    <ClInclude Include="Zycore\List.h" />
-    <ClInclude Include="Zycore\Object.h" />
-    <ClInclude Include="Zycore\Status.h" />
-    <ClInclude Include="Zycore\String.h" />
-    <ClInclude Include="Zycore\Types.h" />
-    <ClInclude Include="Zycore\Vector.h" />
-    <ClInclude Include="Zycore\Zycore.h" />
+    <ClInclude Include="..\Zycore\ZycoreExportConfig.h" />
+    <ClInclude Include="..\Zycore\Allocator.h" />
+    <ClInclude Include="..\Zycore\API\Memory.h" />
+    <ClInclude Include="..\Zycore\API\Synchronization.h" />
+    <ClInclude Include="..\Zycore\API\Terminal.h" />
+    <ClInclude Include="..\Zycore\API\Thread.h" />
+    <ClInclude Include="..\Zycore\ArgParse.h" />
+    <ClInclude Include="..\Zycore\Bitset.h" />
+    <ClInclude Include="..\Zycore\Comparison.h" />
+    <ClInclude Include="..\Zycore\Defines.h" />
+    <ClInclude Include="..\Zycore\Format.h" />
+    <ClInclude Include="..\Zycore\LibC.h" />
+    <ClInclude Include="..\Zycore\List.h" />
+    <ClInclude Include="..\Zycore\Object.h" />
+    <ClInclude Include="..\Zycore\Status.h" />
+    <ClInclude Include="..\Zycore\String.h" />
+    <ClInclude Include="..\Zycore\Types.h" />
+    <ClInclude Include="..\Zycore\Vector.h" />
+    <ClInclude Include="..\Zycore\Zycore.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
@@ -171,7 +171,7 @@
       <PreprocessorDefinitions>ZYCORE_STATIC_DEFINE;ZYCORE_EXPORTS;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>./</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../Zycore</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
