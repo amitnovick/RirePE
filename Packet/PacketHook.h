@@ -10,6 +10,7 @@ typedef struct {
 	bool use_thread;
 	bool high_version_mode;
 	bool use_addr;
+	bool enable_blocking; // If false, all packets logged async without blocking
 	ULONG_PTR addr_SendPacket;
 	ULONG_PTR addr_SendPacket2; // extra argument
 	ULONG_PTR addr_COutPacket;

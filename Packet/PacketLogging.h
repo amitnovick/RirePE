@@ -26,10 +26,15 @@ extern DWORD packet_id_out;
 extern DWORD packet_id_in;
 
 void ClearQueue(OutPacket *op);
-void AddQueue(PacketExtraInformation &pxi);
+
+// Inline for performance - called on every encode operation
+inline void AddQueue(PacketExtraInformation &pxi);
 void AddExtra(PacketExtraInformation &pxi);
 void AddSendPacket(OutPacket *op, ULONG_PTR addr, bool &bBlock);
 void AddRecvPacket(InPacket *ip, ULONG_PTR addr, bool &bBlock);
+
+// Global settings
+extern bool g_EnableBlocking;
 
 extern PipeClient *pc;
 extern CRITICAL_SECTION cs;

@@ -152,15 +152,32 @@ This document describes the performance optimizations implemented to address slo
 
 ## Configuration
 
-The system works automatically with existing configuration. Optional settings in `RirePE.ini`:
+**IMPORTANT:** Add this setting to `RirePE.ini` (or `RirePE64.ini`):
 
 ```ini
 [Packet]
-; Existing settings still work
+; CRITICAL: Enable this for maximum performance
+ENABLE_BLOCKING=0
+
+; Other settings
 DEBUG_MODE=0
 USE_THREAD=1
 USE_ADDR=0
 ```
+
+### ENABLE_BLOCKING Setting
+
+- **ENABLE_BLOCKING=0 (Recommended):** Packets logged asynchronously without blocking game thread
+  - Maximum performance
+  - "Block" checkbox in UI won't work
+  - Use this unless you specifically need to block packets
+
+- **ENABLE_BLOCKING=1 (Legacy mode):** Packets wait for block check from RirePE.exe
+  - Slower performance (blocking wait on every packet)
+  - "Block" checkbox functional
+  - Only use if you need to actively filter/block packets
+
+**Default if not specified:** 0 (fast mode)
 
 ## Rollback Instructions
 

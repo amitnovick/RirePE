@@ -1,0 +1,65 @@
+[Packet]
+; ============================================================================
+; PERFORMANCE SETTINGS
+; ============================================================================
+
+; ENABLE_BLOCKING controls whether packets wait for block check
+; 0 = Fast mode (async logging, block checkbox disabled) - RECOMMENDED
+; 1 = Slow mode (wait for block check, block checkbox works)
+; Default: 0
+ENABLE_BLOCKING=0
+
+; ============================================================================
+; DEBUGGING SETTINGS
+; ============================================================================
+
+; DEBUG_MODE enables detailed logging
+; 0 = Disabled
+; 1 = Enabled (creates debug output)
+; Default: 0
+DEBUG_MODE=0
+
+; USE_THREAD enables thread-based hooking (recommended for stability)
+; 0 = Hook from DllMain (may cause timeout)
+; 1 = Hook from separate thread (more stable)
+; Default: 1
+USE_THREAD=1
+
+; HIGH_VERSION_MODE enables CInPacket support for newer clients
+; 0 = Disabled
+; 1 = Enabled (for v131+)
+; Default: 0
+HIGH_VERSION_MODE=0
+
+; ============================================================================
+; ADVANCED SETTINGS (leave these disabled unless you know what you're doing)
+; ============================================================================
+
+; USE_ADDR uses hardcoded addresses instead of AOB scanning
+; 0 = Use AOB scan (automatic)
+; 1 = Use addresses below (manual)
+; Default: 0
+USE_ADDR=0
+
+; Manual addresses (only used if USE_ADDR=1)
+; Format: Hexadecimal address without 0x prefix
+; Example: SendPacket=00401000
+;
+; SendPacket=
+; SendPacket2=
+; COutPacket=
+; COutPacket2=
+; COutPacket3=
+; Encode1=
+; Encode2=
+; Encode4=
+; Encode8=
+; EncodeStr=
+; EncodeBuffer=
+; ProcessPacket=
+; Decode1=
+; Decode2=
+; Decode4=
+; Decode8=
+; DecodeStr=
+; DecodeBuffer=

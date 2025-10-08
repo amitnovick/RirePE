@@ -6,6 +6,9 @@
 DWORD packet_id_out = 2; // 偶数
 DWORD packet_id_in = 1; // 奇数
 
+// Global setting for packet blocking (false = async logging only, true = wait for block check)
+bool g_EnableBlocking = false;
+
 DWORD CountUpPacketID(DWORD &id) {
 	id += 2;
 	return id;
@@ -91,30 +94,59 @@ void AddExtra(PacketExtraInformation &pxi) {
 
 // for SendPacket format - using unordered_map for O(1) lookup
 std::unordered_map<ULONG_PTR, std::vector<PacketExtraInformation>> packet_tracking_map;
+CRITICAL_SECTION tracking_cs;
+bool tracking_cs_initialized = false;
+
+void InitTracking() {
+	if (!tracking_cs_initialized) {
+		InitializeCriticalSection(&tracking_cs);
+		tracking_cs_initialized = true;
+	}
+}
 
 void ClearQueue(OutPacket *op) {
+	if (!tracking_cs_initialized) return;
+
 	ULONG_PTR tracking_id = (ULONG_PTR)op;
+	EnterCriticalSection(&tracking_cs);
 	auto it = packet_tracking_map.find(tracking_id);
 	if (it != packet_tracking_map.end()) {
 		packet_tracking_map.erase(it);
 	}
+	LeaveCriticalSection(&tracking_cs);
 }
 
 void AddQueue(PacketExtraInformation &pxi) {
+	if (!tracking_cs_initialized) return;
+
 	//DEBUG(L"debug... ID : " + std::to_wstring(pxi.id) + L", " + std::to_wstring(pxi.pos) + L", " + std::to_wstring(pxi.size));
 	ULONG_PTR tracking_id = pxi.tracking;
+
+	EnterCriticalSection(&tracking_cs);
 	packet_tracking_map[tracking_id].push_back(pxi);
+	LeaveCriticalSection(&tracking_cs);
 }
 
 void AddExtraAll(OutPacket *op) {
+	if (!tracking_cs_initialized) return;
+
 	ULONG_PTR tracking_id = (ULONG_PTR)op;
+
+	EnterCriticalSection(&tracking_cs);
 	auto it = packet_tracking_map.find(tracking_id);
 	if (it != packet_tracking_map.end()) {
-		for (auto &pei : it->second) {
+		// Copy and erase before leaving critical section
+		std::vector<PacketExtraInformation> items = std::move(it->second);
+		packet_tracking_map.erase(it);
+		LeaveCriticalSection(&tracking_cs);
+
+		// Send outside critical section
+		for (auto &pei : items) {
 			pei.id = packet_id_out; // fix
 			AddExtra(pei);
 		}
-		packet_tracking_map.erase(it);
+	} else {
+		LeaveCriticalSection(&tracking_cs);
 	}
 	//DEBUG(L"list_st = " + std::to_wstring(packet_tracking_map.size()));
 }
@@ -153,9 +185,14 @@ void AddSendPacket(OutPacket *op, ULONG_PTR addr, bool &bBlock) {
 	}
 #endif
 
-	// Queue with blocking response (needs block check)
 	bBlock = false;
-	g_PacketQueue->QueuePacketBlocking(b, total_size, buffer_index, bBlock);
+
+	// If blocking enabled, wait for response. Otherwise send async (much faster!)
+	if (g_EnableBlocking) {
+		g_PacketQueue->QueuePacketBlocking(b, total_size, buffer_index, bBlock);
+	} else {
+		g_PacketQueue->QueuePacket(b, total_size, buffer_index);
+	}
 }
 
 void AddRecvPacket(InPacket *ip, ULONG_PTR addr, bool &bBlock) {
@@ -183,14 +220,20 @@ void AddRecvPacket(InPacket *ip, ULONG_PTR addr, bool &bBlock) {
 	pem->Binary.length = ip->size;
 	memcpy_s(pem->Binary.packet, ip->size, &ip->packet[4], ip->size);
 
-	// Queue with blocking response (needs block check)
 	bBlock = false;
-	g_PacketQueue->QueuePacketBlocking(b, total_size, buffer_index, bBlock);
+
+	// If blocking enabled, wait for response. Otherwise send async (much faster!)
+	if (g_EnableBlocking) {
+		g_PacketQueue->QueuePacketBlocking(b, total_size, buffer_index, bBlock);
+	} else {
+		g_PacketQueue->QueuePacket(b, total_size, buffer_index);
+	}
 }
 
 PipeClient *pc = NULL;
 
 bool StartPipeClient() {
+	InitTracking();
 	pc = new PipeClient(GetPipeNameLogger());
 	return pc->Run();
 }

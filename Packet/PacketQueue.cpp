@@ -175,10 +175,14 @@ DWORD WINAPI AsyncPacketQueue::WorkerThreadProc(LPVOID param) {
 }
 
 void AsyncPacketQueue::ProcessQueue() {
-	while (running) {
-		WaitForSingleObject(wake_event, 100); // 100ms timeout for shutdown check
+	const int BATCH_SIZE = 16; // Process up to 16 packets at once
+	int processed = 0;
 
-		while (running) {
+	while (running) {
+		WaitForSingleObject(wake_event, 10); // 10ms timeout for shutdown check (faster response)
+
+		processed = 0;
+		while (running && processed < BATCH_SIZE) {
 			QueuedPacket qp;
 			bool has_packet = false;
 
@@ -193,6 +197,8 @@ void AsyncPacketQueue::ProcessQueue() {
 			if (!has_packet) {
 				break;
 			}
+
+			processed++;
 
 			// Send packet through pipe
 			bool success = false;
@@ -209,7 +215,7 @@ void AsyncPacketQueue::ProcessQueue() {
 					}
 				}
 			} else {
-				// Pipe failed, try restart
+				// Pipe failed, try restart (but don't block queue)
 				RestartPipeClient();
 			}
 

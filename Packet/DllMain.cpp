@@ -39,6 +39,12 @@ bool LoadPacketConfig(HINSTANCE hinstDLL) {
 	if (conf.Read(DLL_NAME, L"USE_THREAD", wUseThread) && _wtoi(wUseThread.c_str())) {
 		hs.use_thread = true;
 	}
+	// enable packet blocking (default: false for performance)
+	std::wstring wEnableBlocking;
+	if (conf.Read(DLL_NAME, L"ENABLE_BLOCKING", wEnableBlocking) && _wtoi(wEnableBlocking.c_str())) {
+		hs.enable_blocking = true;
+		g_EnableBlocking = true;
+	}
 	// high version mode (CInPacket), TODO
 	std::wstring wHighVersionMode;
 	if (conf.Read(DLL_NAME, L"HIGH_VERSION_MODE", wHighVersionMode) && _wtoi(wHighVersionMode.c_str())) {
