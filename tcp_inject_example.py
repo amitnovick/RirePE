@@ -13,6 +13,7 @@ This example shows how to:
 import socket
 import struct
 import sys
+import time
 
 TCP_MESSAGE_MAGIC = 0xA11CE
 
@@ -31,22 +32,41 @@ class RirePETCPClient:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((self.host, self.port))
 
-    def recv_message(self):
-        """Receive framed TCP message from DLL"""
-        # Read frame header (8 bytes: magic + length)
-        header = self._recv_exact(8)
-        if not header:
+    def recv_message(self, timeout=None):
+        """Receive framed TCP message from DLL
+
+        Args:
+            timeout: Optional timeout in seconds. If None, blocks indefinitely.
+
+        Returns:
+            Received data bytes or None if timeout/connection closed
+        """
+        # Set socket timeout if specified
+        old_timeout = self.sock.gettimeout()
+        if timeout is not None:
+            self.sock.settimeout(timeout)
+
+        try:
+            # Read frame header (8 bytes: magic + length)
+            header = self._recv_exact(8)
+            if not header:
+                return None
+
+            magic, length = struct.unpack('<II', header)
+
+            # Verify magic
+            if magic != TCP_MESSAGE_MAGIC:
+                raise ValueError(f"Invalid magic: 0x{magic:X}, expected 0x{TCP_MESSAGE_MAGIC:X}")
+
+            # Read payload
+            data = self._recv_exact(length)
+            return data
+        except socket.timeout:
             return None
-
-        magic, length = struct.unpack('<II', header)
-
-        # Verify magic
-        if magic != TCP_MESSAGE_MAGIC:
-            raise ValueError(f"Invalid magic: 0x{magic:X}, expected 0x{TCP_MESSAGE_MAGIC:X}")
-
-        # Read payload
-        data = self._recv_exact(length)
-        return data
+        finally:
+            # Restore original timeout
+            if timeout is not None:
+                self.sock.settimeout(old_timeout)
 
     def send_inject_packet(self, header_type, packet_bytes):
         """
@@ -178,7 +198,8 @@ def main():
     Example workflow:
     1. Wait for RECVPACKET from game server
     2. When 0x116 packet arrives, parse and print it, respond with 0x004E packet
-    3. Continue monitoring (does not disconnect)
+    3. Wait up to 5 seconds for verification that the packet was sent
+    4. Disconnect and exit
     """
 
     # Configuration
@@ -191,6 +212,9 @@ def main():
     # Response packet to send (header 0x004E + buffer)
     RESPONSE_PACKET = struct.pack('<H', 0x004E) + bytes.fromhex('C2 C5 D3 04 02 04 00 00 00 01 00'.replace(' ', ''))
 
+    # Verification timeout in seconds
+    VERIFICATION_TIMEOUT = 5.0
+
     client = RirePETCPClient(HOST, PORT)
 
     try:
@@ -198,10 +222,27 @@ def main():
         client.connect()
 
         # Step 2: Monitor incoming packets
+        packet_sent = False
+        verification_start_time = None
+        first_0x116_handled = False  # Track if we've already handled the first 0x116
+
         while True:
-            # Receive message from DLL
-            data = client.recv_message()
+            # Determine timeout for recv_message
+            if packet_sent and verification_start_time is not None:
+                elapsed = time.time() - verification_start_time
+                remaining_timeout = max(0, VERIFICATION_TIMEOUT - elapsed)
+
+                if remaining_timeout <= 0:
+                    print("\nTimeout: Packet verification not received within 5 seconds")
+                    break
+
+                data = client.recv_message(timeout=remaining_timeout)
+            else:
+                data = client.recv_message()
+
             if not data:
+                if packet_sent:
+                    print("\nConnection closed before packet verification")
                 break
 
             # Parse the message
@@ -218,8 +259,8 @@ def main():
                 if len(packet_data) >= 2:
                     packet_header = struct.unpack('<H', packet_data[0:2])[0]
 
-                    # Check if this is our target packet (0x116)
-                    if packet_header == TARGET_RECV_HEADER:
+                    # Check if this is our target packet (0x116) AND we haven't handled one yet
+                    if packet_header == TARGET_RECV_HEADER and not first_0x116_handled:
                         # Parse and print the 0x116 packet
                         parsed_info = parse_spawn_monster_control(packet_data)
                         print(parsed_info)
@@ -228,8 +269,23 @@ def main():
                         client.send_inject_packet(SENDPACKET, RESPONSE_PACKET)
                         print(f"\nSent response packet: {RESPONSE_PACKET.hex()}")
 
-                        # Disconnect and exit
-                        break
+                        # Mark that we sent the packet and start verification timer
+                        packet_sent = True
+                        first_0x116_handled = True
+                        verification_start_time = time.time()
+                        print("Waiting for packet verification (up to 5 seconds)...")
+
+            elif msg['header'] == SENDPACKET and packet_sent:
+                # This is a SENDPACKET from server → client
+                # Verify it matches what we sent
+                packet_data = msg['binary']['packet']
+
+                if packet_data == RESPONSE_PACKET:
+                    elapsed = time.time() - verification_start_time
+                    print(f"\n✓ Packet verified! Server sent our packet after {elapsed:.2f} seconds")
+                    break
+                else:
+                    print(f"\nReceived SENDPACKET but it doesn't match (got: {packet_data.hex()})")
 
     except KeyboardInterrupt:
         pass

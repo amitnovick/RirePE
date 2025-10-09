@@ -11,10 +11,14 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 	if (!bToBeInject) {
 		return;
 	}
+	DEBUGLOG(L"PacketInjector: Processing injection request...");
 	std::vector<BYTE> data = global_data;
 	bToBeInject = false;
 
 	PacketEditorMessage *pcm = (PacketEditorMessage *)&data[0];
+	DEBUGLOG(L"PacketInjector: Message type = " + std::to_wstring(pcm->header) +
+		L" (SENDPACKET=" + std::to_wstring(SENDPACKET) + L", RECVPACKET=" + std::to_wstring(RECVPACKET) + L")");
+
 	if (pcm->header == SENDPACKET) {
 		DEBUGLOG(L"PacketInjector: SENDPACKET requested");
 #ifdef _WIN64
@@ -73,7 +77,8 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 		DEBUGLOG(L"PacketInjector: Packet sent successfully!");
 #endif
 	}
-	else {
+	else if (pcm->header == RECVPACKET) {
+		DEBUGLOG(L"PacketInjector: RECVPACKET requested");
 		std::vector<BYTE> packet;
 		packet.resize(pcm->Binary.length + 0x04);
 		packet[0] = 0xF7;
@@ -90,6 +95,10 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 		InPacket p = { 0x00, 0x02, &packet[0], (WORD)packet.size(), 0x00, (WORD)pcm->Binary.length, 0x00, 0x04 };
 		ProcessPacket_Hook((void *)GetCClientSocket(), 0, &p);
 #endif
+		DEBUGLOG(L"PacketInjector: RECVPACKET injection completed");
+	}
+	else {
+		DEBUGLOG(L"PacketInjector: WARNING - Unknown message type: " + std::to_wstring(pcm->header));
 	}
 }
 
@@ -101,6 +110,7 @@ HWND WINAPI CreateWindowExA_Hook(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpW
 			bInjectorCallback = true;
 			SetTimer(hRet, 1337, 50, PacketInjector);
 			DEBUG(L"MAIN THREAD OK 2");
+			DEBUGLOG(L"PacketInjector timer callback installed (via CreateWindowExA hook)");
 		}
 		return hRet;
 	}
@@ -118,6 +128,7 @@ BOOL CALLBACK SearchMaple(HWND hwnd, LPARAM lParam) {
 						bInjectorCallback = true;
 						SetTimer(hwnd, 1337, 50, PacketInjector);
 						DEBUG(L"MAIN THREAD OK 1");
+						DEBUGLOG(L"PacketInjector timer callback installed (via SearchMaple)");
 					}
 				}
 				return FALSE;

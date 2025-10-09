@@ -51,17 +51,33 @@ bool TCPCommunicate(TCPServerThread &client) {
 		if (data.size() >= sizeof(PacketEditorMessage)) {
 			PacketEditorMessage* pcm = (PacketEditorMessage*)&data[0];
 
+			DEBUGLOG(L"[TCP] PacketEditorMessage parsed:");
+			DEBUGLOG(L"[TCP]   - header: " + std::to_wstring(pcm->header) +
+				L" (SENDPACKET=0, RECVPACKET=1)");
+			DEBUGLOG(L"[TCP]   - id: " + std::to_wstring(pcm->id));
+			DEBUGLOG(L"[TCP]   - addr: 0x" + std::to_wstring(pcm->addr));
+			DEBUGLOG(L"[TCP]   - Binary.length: " + std::to_wstring(pcm->Binary.length));
+
 			// Only inject SENDPACKET and RECVPACKET commands
 			if (pcm->header == SENDPACKET || pcm->header == RECVPACKET) {
 				DEBUGLOG(L"[TCP] Packet injection request: " +
 					std::wstring(pcm->header == SENDPACKET ? L"SENDPACKET" : L"RECVPACKET"));
+
+				// Log first few bytes of packet
+				std::wstring packet_preview = L"[TCP] Packet data (first 16 bytes): ";
+				for (DWORD i = 0; i < min(16, pcm->Binary.length); i++) {
+					wchar_t hex[4];
+					swprintf_s(hex, L"%02X ", pcm->Binary.packet[i]);
+					packet_preview += hex;
+				}
+				DEBUGLOG(packet_preview);
 
 				// Use same injection mechanism as pipe (via timer callback)
 				if (!bToBeInject) {
 					global_data.clear();
 					global_data = data;
 					bToBeInject = true;
-					DEBUGLOG(L"[TCP] Packet queued for injection");
+					DEBUGLOG(L"[TCP] Packet queued for injection (bToBeInject=true)");
 				} else {
 					DEBUGLOG(L"[TCP] Injection already pending, dropping packet");
 				}
@@ -69,7 +85,9 @@ bool TCPCommunicate(TCPServerThread &client) {
 				DEBUGLOG(L"[TCP] Ignoring non-injection message type: " + std::to_wstring(pcm->header));
 			}
 		} else {
-			DEBUGLOG(L"[TCP] Received data too small to be PacketEditorMessage");
+			DEBUGLOG(L"[TCP] Received data too small to be PacketEditorMessage (got " +
+				std::to_wstring(data.size()) + L" bytes, need at least " +
+				std::to_wstring(sizeof(PacketEditorMessage)) + L" bytes)");
 		}
 	}
 
