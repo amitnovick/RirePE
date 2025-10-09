@@ -46,23 +46,25 @@ bool LoadPacketConfig(HINSTANCE hinstDLL) {
 		hs.enable_blocking = true;
 		g_EnableBlocking = true;
 	}
-	// TCP mode (default: false, uses named pipes)
-	extern bool g_UseTCP;
+
+	// TCP configuration (now mandatory)
 	extern std::string g_TCPHost;
 	extern int g_TCPPort;
-	std::wstring wUseTCP;
-	if (conf.Read(DLL_NAME, L"USE_TCP", wUseTCP) && _wtoi(wUseTCP.c_str())) {
-		g_UseTCP = true;
-		// Read TCP host
-		std::wstring wTCPHost;
-		if (conf.Read(DLL_NAME, L"TCP_HOST", wTCPHost)) {
-			g_TCPHost = std::string(wTCPHost.begin(), wTCPHost.end());
-		}
-		// Read TCP port
-		std::wstring wTCPPort;
-		if (conf.Read(DLL_NAME, L"TCP_PORT", wTCPPort)) {
-			g_TCPPort = _wtoi(wTCPPort.c_str());
-		}
+
+	// Read TCP host (default: localhost)
+	std::wstring wTCPHost;
+	if (conf.Read(DLL_NAME, L"TCP_HOST", wTCPHost)) {
+		g_TCPHost = std::string(wTCPHost.begin(), wTCPHost.end());
+	} else {
+		g_TCPHost = "127.0.0.1";  // Default
+	}
+
+	// Read TCP port (default: 8275)
+	std::wstring wTCPPort;
+	if (conf.Read(DLL_NAME, L"TCP_PORT", wTCPPort)) {
+		g_TCPPort = _wtoi(wTCPPort.c_str());
+	} else {
+		g_TCPPort = 8275;  // Default
 	}
 	// high version mode (CInPacket), TODO
 	std::wstring wHighVersionMode;
@@ -230,9 +232,10 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
 		DEBUGLOG(L"[INIT] Loading packet config...");
 		LoadPacketConfig(hinstDLL);
 
-		extern bool g_UseTCP;
+		extern std::string g_TCPHost;
 		extern int g_TCPPort;
-		DEBUGLOG(L"[INIT] Config loaded - USE_TCP=" + std::to_wstring(g_UseTCP) + L", Port=" + std::to_wstring(g_TCPPort));
+		std::wstring wTCPHost(g_TCPHost.begin(), g_TCPHost.end());
+		DEBUGLOG(L"[INIT] Config loaded - TCP Host=" + wTCPHost + L", Port=" + std::to_wstring(g_TCPPort));
 
 		DEBUGLOG(L"[INIT] Starting packet hook...");
 		PacketHook(gHookSettings);

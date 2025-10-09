@@ -1,5 +1,25 @@
 [Packet]
 ; ============================================================================
+; NETWORK SETTINGS
+; ============================================================================
+
+; TCP_PORT specifies the port for remote monitoring
+; Default: 8275
+; Connect using: python packet_monitor.py localhost 8275
+TCP_PORT=8275
+
+; TCP_HOST specifies the bind address (usually localhost)
+; Default: localhost (127.0.0.1)
+; Use 0.0.0.0 to allow connections from other machines (SECURITY RISK!)
+TCP_HOST=localhost
+
+; Note: Packet.dll now operates in TCP-only mode
+; The RirePE.exe GUI has been removed
+; Use Python scripts for packet monitoring:
+;   - packet_monitor.py: View packet logs
+;   - tcp_inject_example.py: Send/receive packets programmatically
+
+; ============================================================================
 ; PERFORMANCE SETTINGS
 ; ============================================================================
 

@@ -251,10 +251,9 @@ void AddRecvPacket(InPacket *ip, ULONG_PTR addr, bool &bBlock) {
 
 PipeClient *pc = NULL;
 
-// Use TCP mode flag (set from config)
-bool g_UseTCP = false;
+// TCP configuration (now mandatory)
 std::string g_TCPHost = "127.0.0.1";
-int g_TCPPort = 9999;
+int g_TCPPort = 8275;
 
 // TCP functions implemented in PacketTCP.cpp
 extern bool SendPacketDataTCP(BYTE *bData, ULONG_PTR uLength);
@@ -301,11 +300,9 @@ bool SendPacketData(BYTE *bData, ULONG_PTR uLength) {
 		}
 	}
 
-	// Also send to TCP client if enabled (allows simultaneous local + remote monitoring)
-	if (g_UseTCP) {
-		tcp_success = SendPacketDataTCP(bData, uLength);
-		// Note: tcp_success=true even when no client connected (not an error)
-	}
+	// Always send to TCP clients (TCP is now mandatory)
+	tcp_success = SendPacketDataTCP(bData, uLength);
+	// Note: tcp_success=true even when no client connected (not an error)
 
 	// Success if pipe succeeded (TCP is optional)
 	// We primarily care about pipe success for RirePE.exe
@@ -320,10 +317,6 @@ bool RecvPacketData(std::vector<BYTE> &vData) {
 		return pc->Recv(vData);
 	}
 
-	// Only use TCP if pipe is not available
-	if (g_UseTCP) {
-		return RecvPacketDataTCP(vData);
-	}
-
-	return false;
+	// Use TCP if pipe is not available (TCP is now always enabled)
+	return RecvPacketDataTCP(vData);
 }

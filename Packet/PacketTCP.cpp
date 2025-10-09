@@ -14,7 +14,6 @@ CRITICAL_SECTION tcp_client_cs;
 bool tcp_cs_initialized = false;
 
 // TCP configuration (defined in PacketLogging.cpp)
-extern bool g_UseTCP;
 extern std::string g_TCPHost;
 extern int g_TCPPort;
 
