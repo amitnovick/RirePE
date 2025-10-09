@@ -225,25 +225,23 @@ void AsyncPacketQueue::ProcessQueue() {
 			if (SendPacketData(qp.data, qp.size)) {
 				success = true;
 
-				// Determine if this packet type expects a response
-				// SENDPACKET and RECVPACKET always get responses from RirePE.exe
-				bool expects_response = false;
-				if (qp.size >= sizeof(PacketEditorMessage)) {
-					PacketEditorMessage* pem = (PacketEditorMessage*)qp.data;
-					expects_response = (pem->header == SENDPACKET || pem->header == RECVPACKET);
-				}
+				// In headless mode (TCP-only), we don't expect responses from monitoring clients
+				// Responses are only needed for packet blocking (ENABLE_BLOCKING=1)
+				// and only when the caller explicitly requested a response (qp.needs_response)
+				//
+				// Note: For monitoring clients (packet_monitor.py), they never send responses
+				// They only receive packet data for logging purposes
+				//
+				// If blocking is enabled and caller needs response, they will wait via
+				// the response_event, but we don't try to receive here since monitoring
+				// clients don't send data back
 
-				// Always read response if server sends one (to keep communication in sync)
-				if (expects_response) {
-					BYTE response = 0;
-					std::vector<BYTE> vData;
-					if (RecvPacketData(vData) && vData.size() >= 1) {
-						response = vData[0];
-						// Only store result if caller is waiting
-						if (qp.needs_response) {
-							qp.block_result = (response == 1);
-						}
-					}
+				// Only try to receive response if caller is explicitly waiting for one
+				if (qp.needs_response) {
+					// This only happens when ENABLE_BLOCKING=1 and the packet is a SENDPACKET
+					// In this case, we'd need a blocking-capable client to send back a decision
+					// For now, default to allowing the packet (response = 0)
+					qp.block_result = false;
 				}
 			} else {
 				// Connection failed - packets will be dropped if no TCP clients connected
