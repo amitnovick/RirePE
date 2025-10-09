@@ -147,21 +147,7 @@ bool SetCallBack() {
 	return bInjectorCallback;
 }
 
-bool CommunicateThread(PipeServerThread& psh) {
-	std::vector<BYTE> data;
-	if (psh.Recv(data) && !bToBeInject) {
-		global_data.clear();
-		global_data = data;
-		bToBeInject = true;
-	}
-	return true;
-}
-
-bool PacketSender() {
-	PipeServer ps(GetPipeNameSender());
-	ps.SetCommunicate(CommunicateThread);
-	return ps.Run();
-}
+// Pipe server removed - packet injection now handled via TCP in PacketTCP.cpp
 
 bool SetCallBackThread() {
 	while (bInjectorCallback == false) {
@@ -182,14 +168,8 @@ bool SetBackdoor() {
 }
 
 bool RunPacketSender() {
+	// Set up timer callback for packet injection
+	// Packet reception now handled via TCP instead of pipe server
 	SetBackdoor();
-
-	HANDLE hThread = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)PacketSender, NULL, NULL, NULL);
-
-	if (!hThread) {
-		return false;
-	}
-
-	CloseHandle(hThread);
 	return true;
 }

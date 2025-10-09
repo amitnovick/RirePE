@@ -5,12 +5,8 @@
 #define DLL_NAME L"Packet"
 #define INI_FILE_NAME L"RirePE.ini"
 
-// TCP Configuration (replaces pipe names)
+// TCP Configuration
 #define DEFAULT_TCP_PORT 8275
-
-// Pipe names - will be removed in Phase 2.8 when helper functions are deleted
-#define PE_LOGGER_PIPE_NAME L"PacketLogger"
-#define PE_SENDER_PIPE_NAME L"PacketSender"
 
 #pragma pack(push, 1)
 

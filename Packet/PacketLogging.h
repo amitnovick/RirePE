@@ -34,16 +34,11 @@ void AddRecvPacket(InPacket *ip, ULONG_PTR addr, bool &bBlock);
 // Global settings
 extern bool g_EnableBlocking;
 
-extern PipeClient *pc;
-extern CRITICAL_SECTION cs;
-bool StartPipeClient();
-bool RestartPipeClient();
-
 // TCP Client support (implemented in PacketTCP.cpp)
 bool StartTCPClient();
 bool RestartTCPClient();
 
-// Abstract interface for sending packets (works with both pipe and TCP)
+// TCP-only interface for sending packets
 bool SendPacketData(BYTE *bData, ULONG_PTR uLength);
 bool RecvPacketData(std::vector<BYTE> &vData);
 

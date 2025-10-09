@@ -249,8 +249,6 @@ void AddRecvPacket(InPacket *ip, ULONG_PTR addr, bool &bBlock) {
 	}
 }
 
-PipeClient *pc = NULL;
-
 // TCP configuration (now mandatory)
 std::string g_TCPHost = "127.0.0.1";
 int g_TCPPort = 8275;
@@ -259,64 +257,13 @@ int g_TCPPort = 8275;
 extern bool SendPacketDataTCP(BYTE *bData, ULONG_PTR uLength);
 extern bool RecvPacketDataTCP(std::vector<BYTE> &vData);
 
-bool StartPipeClient() {
-	DEBUGLOG(L"[PIPE] StartPipeClient() called");
-	InitTracking();
-	pc = new PipeClient(GetPipeNameLogger());
-	bool result = pc->Run();
-	if (result) {
-		DEBUGLOG(L"[PIPE] Pipe client connected successfully");
-	} else {
-		DEBUGLOG(L"[PIPE] Pipe client connection FAILED");
-	}
-	return result;
-}
-
-bool RestartPipeClient() {
-	if (pc) {
-		delete pc;
-		pc = NULL;
-	}
-	return StartPipeClient();
-}
-
-// Abstract send/recv functions that broadcast to both pipe and TCP
+// TCP-only implementation (pipe removed)
 bool SendPacketData(BYTE *bData, ULONG_PTR uLength) {
-	static int packet_count = 0;
-	packet_count++;
-
-	bool pipe_success = false;
-	bool tcp_success = false;
-
-	// Always send to pipe client (RirePE.exe) if available
-	if (pc) {
-		pipe_success = pc->Send(bData, uLength);
-		if (packet_count <= 5 || packet_count % 100 == 0) {
-			DEBUGLOG(L"[PACKET #" + std::to_wstring(packet_count) + L"] Pipe→RirePE.exe: " + (pipe_success ? L"✓" : L"✗"));
-		}
-	} else {
-		if (packet_count == 1) {
-			DEBUGLOG(L"[PACKET] ERROR: Pipe client (pc) is NULL!");
-		}
-	}
-
-	// Always send to TCP clients (TCP is now mandatory)
-	tcp_success = SendPacketDataTCP(bData, uLength);
-	// Note: tcp_success=true even when no client connected (not an error)
-
-	// Success if pipe succeeded (TCP is optional)
-	// We primarily care about pipe success for RirePE.exe
-	return pipe_success;
+	// TCP-only implementation
+	return SendPacketDataTCP(bData, uLength);
 }
 
 bool RecvPacketData(std::vector<BYTE> &vData) {
-	// ALWAYS prioritize pipe client response (RirePE.exe)
-	// Only read from pipe if it exists - don't try TCP as fallback
-	// because both destinations get the same packet and may both respond
-	if (pc) {
-		return pc->Recv(vData);
-	}
-
-	// Use TCP if pipe is not available (TCP is now always enabled)
+	// TCP-only implementation
 	return RecvPacketDataTCP(vData);
 }

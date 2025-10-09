@@ -141,19 +141,6 @@ bool SavePacketConfig() {
 
 
 int target_pid = 0;
-std::wstring GetPipeNameLogger() {
-	if (target_pid) {
-		return PE_LOGGER_PIPE_NAME + std::to_wstring(target_pid);
-	}
-	return PE_LOGGER_PIPE_NAME;
-}
-
-std::wstring GetPipeNameSender() {
-	if (target_pid) {
-		return PE_SENDER_PIPE_NAME + std::to_wstring(target_pid);
-	}
-	return PE_SENDER_PIPE_NAME;
-}
 
 bool RunPacketLogger(HookSettings &hs) {
 	DEBUGLOG(L"[INIT] Starting headless packet logger (TCP-only mode)");
