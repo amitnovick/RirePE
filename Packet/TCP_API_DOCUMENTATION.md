@@ -288,14 +288,63 @@ def send_response(sock, block_packet):
 - Server will hang if response is not sent in blocking mode
 - Block/allow responses are sent as **raw bytes** (not framed) for compatibility
 
-#### b) Future Extensions
+#### b) Packet Injection
 
-The bidirectional protocol enables future enhancements such as:
-- **Command injection**: Send custom packets to inject into game
-- **DLL control**: Start/stop packet capture, change filters
-- **Real-time modification**: Send modified packet data back to DLL
+**Status**: ✅ Fully implemented as of latest version
 
-These features would require DLL-side implementation to process incoming framed messages in the `TCPCommunicate()` function (PacketTCP.cpp:25).
+Send packet injection commands to inject custom packets into the game:
+
+```python
+def send_inject_packet(sock, header_type, packet_bytes):
+    """
+    Send packet injection command to DLL
+
+    Args:
+        sock: Socket connection
+        header_type: SENDPACKET (0) or RECVPACKET (1)
+        packet_bytes: Raw packet data including header
+    """
+    # Build PacketEditorMessage structure
+    # Pack: header(4) + id(4) + addr(8) + length(4) + packet
+    message = struct.pack('<IIQI',
+        header_type,          # SENDPACKET or RECVPACKET
+        0,                    # id (unused for injection)
+        0,                    # addr (unused for injection)
+        len(packet_bytes)     # packet length
+    ) + packet_bytes          # packet data
+
+    # Wrap in TCPMessage frame
+    frame = struct.pack('<II', TCP_MESSAGE_MAGIC, len(message)) + message
+    sock.sendall(frame)
+
+# Example: Inject SENDPACKET (client→server)
+packet_data = struct.pack('<H', 0x1234) + b'\x01\x02\x03'  # Header + data
+send_inject_packet(sock, 0, packet_data)  # 0 = SENDPACKET
+
+# Example: Inject RECVPACKET (server→client simulation)
+packet_data = struct.pack('<H', 0x5678) + b'\xAA\xBB\xCC'
+send_inject_packet(sock, 1, packet_data)  # 1 = RECVPACKET
+```
+
+**Important Notes:**
+- Injection uses same infrastructure as GUI's Send/Recv buttons
+- SENDPACKET injection calls the hooked `SendPacket` function
+- RECVPACKET injection calls the hooked `ProcessPacket` function
+- Injected packets are queued via timer callback (50ms poll rate)
+- Only one injection can be pending at a time (new injections dropped if queue full)
+
+**Implementation Details:**
+- TCP client sends `PacketEditorMessage` with `header=SENDPACKET` or `RECVPACKET`
+- DLL stores message in `global_data` and sets `bToBeInject=true`
+- Timer callback `PacketInjector()` processes injection (PacketSender.cpp:10)
+- Same code path used by pipe-based GUI injection
+
+#### c) Future Extensions
+
+Additional features that could be implemented:
+- **DLL Control**: Start/stop packet capture, change filters
+- **Statistics**: Query packet counts, connection status
+- **Extended Commands**: Custom command protocol beyond packet injection
 
 ### 4. Complete Client Example
 
@@ -623,8 +672,11 @@ A: Pipe connects to local RirePE.exe GUI, TCP allows remote monitoring. Both can
 **Q: Is the TCP protocol bidirectional?**
 A: Yes! The protocol supports bidirectional communication using the same `TCPMessage` framing in both directions. The DLL currently implements DLL→Client broadcasts and Client→DLL block/allow responses. Additional features (like command injection) would require extending the `TCPCommunicate()` function.
 
+**Q: Can I inject packets from the Python client into the game?**
+A: Yes! Send a `PacketEditorMessage` with `header=SENDPACKET` (for outgoing packets) or `header=RECVPACKET` (for incoming packets). The DLL uses the same injection infrastructure as the GUI's Send/Recv buttons. See the "Packet Injection" section and `tcp_inject_example.py` for details.
+
 **Q: Can I send custom commands from the Python client to the DLL?**
-A: The protocol supports it (via `TCPServerThread::Recv()`), but the DLL currently doesn't process incoming framed commands. You can extend `TCPCommunicate()` in PacketTCP.cpp to handle custom command messages.
+A: Packet injection commands are fully supported. Additional custom commands (like DLL control) would require extending the command processing in `TCPCommunicate()`.
 
 **Q: What happens on server restart?**
 A: Existing connections are closed, server rebinds to port and accepts new connections.
@@ -682,11 +734,11 @@ MapleStory Process (with injected Packet.dll)
 - ✅ **Format Analysis**: Understanding packet structure via encode/decode messages (DLL → Client)
 - ✅ **Bidirectional Protocol**: Both directions use same `TCPMessage` framing
 - ✅ **Thread-Safe I/O**: Both Send and Recv protected by critical sections
+- ✅ **Packet Injection**: Client can send SENDPACKET/RECVPACKET commands to inject into game (Client → DLL)
 
 **Protocol-Ready But Not Implemented:**
-- ⚠️ **Packet Injection**: Client sending custom packets to inject into game
-- ⚠️ **DLL Control**: Client sending commands to control packet capture
-- ⚠️ **Real-time Modification**: Client sending modified packet data back
+- ⚠️ **DLL Control**: Client sending commands to control packet capture (start/stop/filter)
+- ⚠️ **Custom Commands**: Extended command set beyond packet injection
 
 ### Implementation Notes
 

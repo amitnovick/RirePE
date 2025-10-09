@@ -21,6 +21,10 @@ extern int g_TCPPort;
 // Initialize tracking (defined in PacketLogging.cpp)
 extern void InitTracking();
 
+// External references to packet injection infrastructure (from PacketSender.cpp)
+extern bool bToBeInject;
+extern std::vector<BYTE> global_data;
+
 // Communication callback for TCP server - handles each client connection
 bool TCPCommunicate(TCPServerThread &client) {
 	DEBUGLOG(L"[TCP] Client connected to TCP server");
@@ -31,18 +35,42 @@ bool TCPCommunicate(TCPServerThread &client) {
 	LeaveCriticalSection(&tcp_client_cs);
 	DEBUGLOG(L"[TCP] Client pointer stored, ready for communication");
 
-	// Keep connection alive - packets will be sent/received by PacketQueue worker thread
-	// This thread just needs to keep the client object alive and detect disconnection
-	// We do this by waiting for a dummy receive that will fail when client disconnects
-	std::vector<BYTE> dummy;
+	// Process incoming commands from TCP client (similar to CommunicateThread for pipes)
+	std::vector<BYTE> data;
 	while (true) {
-		// Try to receive with a timeout (this will block until data or disconnect)
-		// Since Python client only sends responses (single bytes), we don't expect
-		// unsolicited data. If we get anything or connection closes, we exit.
-		Sleep(1000); // Check periodically if we should keep running
+		// Receive framed message from client
+		if (!client.Recv(data)) {
+			// Connection closed or error
+			DEBUGLOG(L"[TCP] Client disconnected or receive failed");
+			break;
+		}
 
-		// Simple liveness check - could also implement a proper heartbeat
-		// For now, just keep the connection alive
+		DEBUGLOG(L"[TCP] Received " + std::to_wstring(data.size()) + L" bytes from client");
+
+		// Check if this is a packet injection command (PacketEditorMessage)
+		if (data.size() >= sizeof(PacketEditorMessage)) {
+			PacketEditorMessage* pcm = (PacketEditorMessage*)&data[0];
+
+			// Only inject SENDPACKET and RECVPACKET commands
+			if (pcm->header == SENDPACKET || pcm->header == RECVPACKET) {
+				DEBUGLOG(L"[TCP] Packet injection request: " +
+					std::wstring(pcm->header == SENDPACKET ? L"SENDPACKET" : L"RECVPACKET"));
+
+				// Use same injection mechanism as pipe (via timer callback)
+				if (!bToBeInject) {
+					global_data.clear();
+					global_data = data;
+					bToBeInject = true;
+					DEBUGLOG(L"[TCP] Packet queued for injection");
+				} else {
+					DEBUGLOG(L"[TCP] Injection already pending, dropping packet");
+				}
+			} else {
+				DEBUGLOG(L"[TCP] Ignoring non-injection message type: " + std::to_wstring(pcm->header));
+			}
+		} else {
+			DEBUGLOG(L"[TCP] Received data too small to be PacketEditorMessage");
+		}
 	}
 
 	// Client disconnected
