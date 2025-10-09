@@ -153,52 +153,28 @@ std::wstring GetPipeNameSender() {
 	return PE_SENDER_PIPE_NAME;
 }
 
-bool RunRirePE(HookSettings &hs) {
-	extern bool g_UseTCP;
+bool RunPacketLogger(HookSettings &hs) {
+	DEBUGLOG(L"[INIT] Starting headless packet logger (TCP-only mode)");
 
-	DEBUGLOG(L"[INIT] RunRirePE() started");
-
-	// Always launch RirePE.exe and start pipe client for local GUI
-	std::wstring wDir;
-	if (GetDir(wDir, hs.hinstDLL)) {
-		std::wstring param = std::to_wstring(target_pid) + L" MapleStoryClass";
-		DEBUGLOG(L"[INIT] Launching RirePE.exe with PID: " + std::to_wstring(target_pid));
-		ShellExecuteW(NULL, NULL, (wDir + L"\\RirePE.exe").c_str(), param.c_str(), wDir.c_str(), SW_SHOW);
-	}
-
-	DEBUGLOG(L"[INIT] Starting pipe client...");
-	// Give RirePE.exe time to start and create the pipe server
-	// Try multiple times with delay
-	bool pipe_connected = false;
-	for (int i = 0; i < 10 && !pipe_connected; i++) {
-		if (i > 0) {
-			DEBUGLOG(L"[INIT] Pipe connection attempt " + std::to_wstring(i + 1) + L"/10");
-			Sleep(500); // Wait 500ms between attempts
-		}
-		pipe_connected = StartPipeClient();
-	}
-
-	if (!pipe_connected) {
-		DEBUGLOG(L"[INIT] WARNING: Pipe client failed to connect after 10 attempts");
-	}
-
-	// Additionally start TCP server if enabled (allows both local GUI and remote monitoring)
-	if (g_UseTCP) {
-		DEBUGLOG(L"[INIT] TCP mode enabled, starting TCP server...");
-		StartTCPClient(); // This now starts a TCP server (function name kept for compatibility)
-		// Server starts in background - clients can connect anytime
+	// Always start TCP server (no longer optional)
+	DEBUGLOG(L"[INIT] Starting TCP server...");
+	if (!StartTCPClient()) {  // Function name kept for compatibility
+		DEBUGLOG(L"[INIT] WARNING: TCP server failed to start");
+		// Continue anyway - packets will queue until client connects
 	} else {
-		DEBUGLOG(L"[INIT] TCP mode disabled");
+		extern int g_TCPPort;
+		DEBUGLOG(L"[INIT] TCP server listening on port " + std::to_wstring(g_TCPPort));
 	}
 
 	DEBUGLOG(L"[INIT] Starting packet sender...");
 	RunPacketSender();
 
-	DEBUGLOG(L"[INIT] RunRirePE() completed");
+	DEBUGLOG(L"[INIT] Headless logger initialized successfully");
+	DEBUGLOG(L"[INIT] Connect using: python packet_monitor.py");
 	return true;
 }
 
-bool PipeStartup(HookSettings &hs) {
+bool PacketLoggerStartup(HookSettings &hs) {
 	target_pid = GetCurrentProcessId();
 
 	// Initialize async packet queue system
@@ -206,7 +182,7 @@ bool PipeStartup(HookSettings &hs) {
 		return false;
 	}
 
-	HANDLE hThread = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)RunRirePE, &hs, NULL, NULL);
+	HANDLE hThread = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)RunPacketLogger, &hs, NULL, NULL);
 	if (hThread) {
 		CloseHandle(hThread);
 	}
@@ -214,7 +190,7 @@ bool PipeStartup(HookSettings &hs) {
 }
 
 bool PacketHook(HookSettings &hs) {
-	PipeStartup(hs);
+	PacketLoggerStartup(hs);
 	// use thread, DllMain sometimes causes timeout
 	if (hs.use_thread) {
 		LPTHREAD_START_ROUTINE thread_func = hs.use_addr ? (LPTHREAD_START_ROUTINE)PacketHook_Conf : (LPTHREAD_START_ROUTINE)PacketHook_Thread;

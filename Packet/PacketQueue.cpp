@@ -246,17 +246,15 @@ void AsyncPacketQueue::ProcessQueue() {
 					}
 				}
 			} else {
-				// Connection failed - don't restart on every packet failure
-				// The startup code will handle initial connection, and we'll just skip failed packets
-				// to avoid spamming restart attempts
+				// Connection failed - packets will be dropped if no TCP clients connected
 				static int failure_count = 0;
 				failure_count++;
 
-				// Only attempt restart after many consecutive failures (not on every packet)
+				// Log periodic warnings about connection failures
 				if (failure_count == 50) {
-					extern bool g_UseTCP;
-					// Always try to restart pipe first since that's for RirePE.exe
-					RestartPipeClient();
+					// No pipe to restart - TCP clients can reconnect on their own
+					// Just log the failure
+					DEBUGLOG(L"[QUEUE] WARNING: 50 consecutive send failures - check TCP connection");
 					failure_count = 0; // Reset counter
 				}
 			}
