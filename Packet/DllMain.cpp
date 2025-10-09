@@ -167,7 +167,20 @@ bool RunRirePE(HookSettings &hs) {
 	}
 
 	DEBUGLOG(L"[INIT] Starting pipe client...");
-	StartPipeClient();
+	// Give RirePE.exe time to start and create the pipe server
+	// Try multiple times with delay
+	bool pipe_connected = false;
+	for (int i = 0; i < 10 && !pipe_connected; i++) {
+		if (i > 0) {
+			DEBUGLOG(L"[INIT] Pipe connection attempt " + std::to_wstring(i + 1) + L"/10");
+			Sleep(500); // Wait 500ms between attempts
+		}
+		pipe_connected = StartPipeClient();
+	}
+
+	if (!pipe_connected) {
+		DEBUGLOG(L"[INIT] WARNING: Pipe client failed to connect after 10 attempts");
+	}
 
 	// Additionally start TCP server if enabled (allows both local GUI and remote monitoring)
 	if (g_UseTCP) {

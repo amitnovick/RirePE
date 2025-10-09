@@ -227,12 +227,18 @@ void AsyncPacketQueue::ProcessQueue() {
 					}
 				}
 			} else {
-				// Connection failed, try restart (but don't block queue)
-				extern bool g_UseTCP;
-				if (g_UseTCP) {
-					RestartTCPClient();
-				} else {
+				// Connection failed - don't restart on every packet failure
+				// The startup code will handle initial connection, and we'll just skip failed packets
+				// to avoid spamming restart attempts
+				static int failure_count = 0;
+				failure_count++;
+
+				// Only attempt restart after many consecutive failures (not on every packet)
+				if (failure_count == 50) {
+					extern bool g_UseTCP;
+					// Always try to restart pipe first since that's for RirePE.exe
 					RestartPipeClient();
+					failure_count = 0; // Reset counter
 				}
 			}
 
