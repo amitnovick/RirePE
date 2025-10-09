@@ -59,6 +59,7 @@ class PacketMonitor:
         self.port = port
         self.sock = None
         self.packet_count = 0
+        self.log_file = None
 
     def connect(self):
         """Connect to the DLL's TCP server"""
@@ -171,24 +172,23 @@ class PacketMonitor:
         return hex_str
 
     def log_packet(self, msg):
-        """Log a packet message to console"""
+        """Log a packet message to file"""
         self.packet_count += 1
         timestamp = datetime.now().strftime('%H:%M:%S.%f')[:-3]
 
         direction = '>>>' if msg['header'] == MessageHeader.SENDPACKET else '<<<'
 
-        print(f"\n[{self.packet_count}] {timestamp} {direction} {msg['header_name']}")
-        print(f"  ID: {msg['id']}, Addr: 0x{msg['addr']:016X}")
+        log_line = f"\n[{self.packet_count}] {timestamp} {direction} {msg['header_name']}\n"
+        log_line += f"  ID: {msg['id']}, Addr: 0x{msg['addr']:016X}\n"
 
         if 'packet_data' in msg:
-            print(f"  Length: {msg['packet_length']}")
-            print(f"  Data: {self.format_hex(msg['packet_data'])}")
+            log_line += f"  Length: {msg['packet_length']}\n"
+            log_line += f"  Data: {self.format_hex(msg['packet_data'])}\n"
+            log_line += f"  Hex: {msg['packet_data'].hex()}\n"
 
-            # Save to file if needed
-            if hasattr(self, 'log_file') and self.log_file:
-                self.log_file.write(f"[{self.packet_count}] {timestamp} {direction} {msg['header_name']}\n")
-                self.log_file.write(f"  ID: {msg['id']}, Addr: 0x{msg['addr']:016X}\n")
-                self.log_file.write(f"  Data: {msg['packet_data'].hex()}\n\n")
+        if self.log_file:
+            self.log_file.write(log_line)
+            self.log_file.flush()
 
     def send_packet_to_dll(self, packet_data, is_recv=False):
         """Send a packet to the DLL for injection"""
@@ -217,10 +217,13 @@ class PacketMonitor:
 
     def run(self, log_file=None):
         """Main monitoring loop"""
-        self.log_file = None
-        if log_file:
-            self.log_file = open(log_file, 'w')
-            print(f"[+] Logging to {log_file}")
+        # Create timestamped log file if not provided
+        if not log_file:
+            timestamp = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+            log_file = f"packet-monitor-{timestamp}.log"
+
+        self.log_file = open(log_file, 'w')
+        print(f"[+] Logging to {log_file}")
 
         try:
             print("[+] Monitoring packets (Ctrl+C to stop)...")
@@ -239,6 +242,7 @@ class PacketMonitor:
         finally:
             if self.log_file:
                 self.log_file.close()
+                print(f"[+] Log saved to {log_file}")
 
 
 def main():
