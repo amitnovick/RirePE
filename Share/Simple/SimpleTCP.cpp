@@ -62,11 +62,20 @@ bool TCPServerThread::Send(BYTE *bData, ULONG_PTR uLength) {
 	msg->length = (DWORD)uLength;
 	memcpy(msg->data, bData, uLength);
 
-	// Send the entire message
-	int sent = send(client_socket, (char*)buffer, total_size, 0);
+	// Send the entire message (loop until all bytes sent)
+	int total_sent = 0;
+	while (total_sent < (int)total_size) {
+		int sent = send(client_socket, (char*)buffer + total_sent, total_size - total_sent, 0);
+		if (sent <= 0) {
+			// Socket error or closed
+			delete[] buffer;
+			return false;
+		}
+		total_sent += sent;
+	}
 	delete[] buffer;
 
-	return (sent == total_size);
+	return true;
 }
 
 bool TCPServerThread::Recv(std::vector<BYTE> &vData) {
@@ -277,11 +286,20 @@ bool TCPClient::Send(BYTE *bData, ULONG_PTR uLength) {
 	msg->length = (DWORD)uLength;
 	memcpy(msg->data, bData, uLength);
 
-	// Send the entire message
-	int sent = send(client_socket, (char*)buffer, total_size, 0);
+	// Send the entire message (loop until all bytes sent)
+	int total_sent = 0;
+	while (total_sent < (int)total_size) {
+		int sent = send(client_socket, (char*)buffer + total_sent, total_size - total_sent, 0);
+		if (sent <= 0) {
+			// Socket error or closed
+			delete[] buffer;
+			return false;
+		}
+		total_sent += sent;
+	}
 	delete[] buffer;
 
-	return (sent == total_size);
+	return true;
 }
 
 bool TCPClient::Recv(std::vector<BYTE> &vData) {
