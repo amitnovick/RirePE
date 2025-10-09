@@ -1,5 +1,6 @@
 ﻿#include"PacketLogging.h"
 #include"PacketQueue.h"
+#include"../Share/Simple/DebugLog.h"
 
 //DWORD packet_id_out = (GetCurrentProcessId() << 16); // 偶数
 //DWORD packet_id_in = (GetCurrentProcessId() << 16) + 1; // 奇数
@@ -242,9 +243,16 @@ extern bool SendPacketDataTCP(BYTE *bData, ULONG_PTR uLength);
 extern bool RecvPacketDataTCP(std::vector<BYTE> &vData);
 
 bool StartPipeClient() {
+	DEBUGLOG(L"[PIPE] StartPipeClient() called");
 	InitTracking();
 	pc = new PipeClient(GetPipeNameLogger());
-	return pc->Run();
+	bool result = pc->Run();
+	if (result) {
+		DEBUGLOG(L"[PIPE] Pipe client connected successfully");
+	} else {
+		DEBUGLOG(L"[PIPE] Pipe client connection FAILED");
+	}
+	return result;
 }
 
 bool RestartPipeClient() {
@@ -257,21 +265,38 @@ bool RestartPipeClient() {
 
 // Abstract send/recv functions that broadcast to both pipe and TCP
 bool SendPacketData(BYTE *bData, ULONG_PTR uLength) {
+	static int packet_count = 0;
+	packet_count++;
+
 	bool pipe_success = false;
 	bool tcp_success = false;
 
 	// Always send to pipe client (RirePE.exe) if available
 	if (pc) {
 		pipe_success = pc->Send(bData, uLength);
+		if (packet_count <= 5 || packet_count % 100 == 0) {
+			DEBUGLOG(L"[PACKET #" + std::to_wstring(packet_count) + L"] Pipe send: " + (pipe_success ? L"SUCCESS" : L"FAILED"));
+		}
+	} else {
+		if (packet_count == 1) {
+			DEBUGLOG(L"[PACKET] ERROR: Pipe client (pc) is NULL!");
+		}
 	}
 
 	// Also send to TCP client if enabled (allows simultaneous local + remote monitoring)
 	if (g_UseTCP) {
 		tcp_success = SendPacketDataTCP(bData, uLength);
+		if (packet_count <= 5 || packet_count % 100 == 0) {
+			DEBUGLOG(L"[PACKET #" + std::to_wstring(packet_count) + L"] TCP send: " + (tcp_success ? L"SUCCESS" : L"FAILED"));
+		}
 	}
 
 	// Success if either pipe or TCP succeeded
-	return pipe_success || tcp_success;
+	bool overall_success = pipe_success || tcp_success;
+	if (packet_count <= 5) {
+		DEBUGLOG(L"[PACKET #" + std::to_wstring(packet_count) + L"] Overall: " + (overall_success ? L"SUCCESS" : L"FAILED"));
+	}
+	return overall_success;
 }
 
 bool RecvPacketData(std::vector<BYTE> &vData) {

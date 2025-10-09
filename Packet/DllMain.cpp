@@ -1,4 +1,5 @@
 ﻿#include"../Share/Simple/Simple.h"
+#include"../Share/Simple/DebugLog.h"
 #include"../Packet/PacketHook.h"
 #include"../Packet/PacketLogging.h"
 #include"../Packet/PacketQueue.h"
@@ -155,21 +156,32 @@ std::wstring GetPipeNameSender() {
 bool RunRirePE(HookSettings &hs) {
 	extern bool g_UseTCP;
 
+	DEBUGLOG(L"[INIT] RunRirePE() started");
+
 	// Always launch RirePE.exe and start pipe client for local GUI
 	std::wstring wDir;
 	if (GetDir(wDir, hs.hinstDLL)) {
 		std::wstring param = std::to_wstring(target_pid) + L" MapleStoryClass";
+		DEBUGLOG(L"[INIT] Launching RirePE.exe with PID: " + std::to_wstring(target_pid));
 		ShellExecuteW(NULL, NULL, (wDir + L"\\RirePE.exe").c_str(), param.c_str(), wDir.c_str(), SW_SHOW);
 	}
+
+	DEBUGLOG(L"[INIT] Starting pipe client...");
 	StartPipeClient();
 
 	// Additionally start TCP server if enabled (allows both local GUI and remote monitoring)
 	if (g_UseTCP) {
+		DEBUGLOG(L"[INIT] TCP mode enabled, starting TCP server...");
 		StartTCPClient(); // This now starts a TCP server (function name kept for compatibility)
 		// Server starts in background - clients can connect anytime
+	} else {
+		DEBUGLOG(L"[INIT] TCP mode disabled");
 	}
 
+	DEBUGLOG(L"[INIT] Starting packet sender...");
 	RunPacketSender();
+
+	DEBUGLOG(L"[INIT] RunRirePE() completed");
 	return true;
 }
 
@@ -222,12 +234,25 @@ bool PacketHook(HookSettings &hs) {
 */
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
 	if (fdwReason == DLL_PROCESS_ATTACH) {
+		DebugLog::Clear(); // Clear previous log
+		DEBUGLOG(L"========== DLL PROCESS ATTACH ==========");
 		DisableThreadLibraryCalls(hinstDLL);
+
+		DEBUGLOG(L"[INIT] Loading packet config...");
 		LoadPacketConfig(hinstDLL);
+
+		extern bool g_UseTCP;
+		extern int g_TCPPort;
+		DEBUGLOG(L"[INIT] Config loaded - USE_TCP=" + std::to_wstring(g_UseTCP) + L", Port=" + std::to_wstring(g_TCPPort));
+
+		DEBUGLOG(L"[INIT] Starting packet hook...");
 		PacketHook(gHookSettings);
 		//SavePacketConfig();
+
+		DEBUGLOG(L"[INIT] DLL initialization complete");
 	}
 	else if (fdwReason == DLL_PROCESS_DETACH) {
+		DEBUGLOG(L"========== DLL PROCESS DETACH ==========");
 		// Clean shutdown of async queue
 		ShutdownPacketQueue();
 	}
