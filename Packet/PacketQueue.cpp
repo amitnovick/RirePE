@@ -1,5 +1,5 @@
 ﻿#include"../Share/Simple/Simple.h"
-#include"../RirePE/RirePE.h"
+#include"PacketDefs.h"
 #include"PacketQueue.h"
 #include"PacketLogging.h"
 

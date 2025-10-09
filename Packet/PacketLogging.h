@@ -1,7 +1,7 @@
 ﻿#ifndef __PACKET_LOGGING_H__
 #define __PACKET_LOGGING_H__
 
-#include"../RirePE/RirePE.h"
+#include"PacketDefs.h"
 #include"../Packet/PacketHook.h"
 #include"../Share/Simple/Simple.h"
 #include<vector>

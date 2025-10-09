@@ -158,6 +158,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AobList.h" />
+    <ClInclude Include="PacketDefs.h" />
     <ClInclude Include="PacketHook.h" />
     <ClInclude Include="PacketLogging.h" />
     <ClInclude Include="PacketQueue.h" />

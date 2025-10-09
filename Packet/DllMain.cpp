@@ -3,7 +3,7 @@
 #include"../Packet/PacketHook.h"
 #include"../Packet/PacketLogging.h"
 #include"../Packet/PacketQueue.h"
-#include"../RirePE/RirePE.h"
+#include"PacketDefs.h"
 
 
 ULONG_PTR StringtoAddress(std::wstring &wAddr) {

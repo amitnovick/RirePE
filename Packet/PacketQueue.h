@@ -3,7 +3,7 @@
 
 #include<Windows.h>
 #include<queue>
-#include"../RirePE/RirePE.h"
+#include"PacketDefs.h"
 
 // Memory pool for packet buffers
 class PacketBufferPool {
