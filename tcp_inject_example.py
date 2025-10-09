@@ -140,28 +140,32 @@ def parse_spawn_monster_control(packet_data):
 
     Format:
     - Header: 2 bytes (0x116)
-    - Monster OID: 4 bytes at offset 2
-    - Position X: 2 bytes at offset 26 (little-endian)
-    - Position Y: 2 bytes at offset 28 (little-endian, signed)
+    - Unknown: 1 byte
+    - Monster OID: 4 bytes at offset 3
+    - Position X: 2 bytes at offset 28 (little-endian)
+    - Position Y: 2 bytes at offset 30 (little-endian, signed)
     """
-    if len(packet_data) < 30:
+    if len(packet_data) < 32:
         return "Packet too short for SPAWN_MONSTER_CONTROL"
 
-    # Extract Monster OID (4 bytes starting at offset 2)
-    monster_oid_bytes = packet_data[2:6]
+    # Extract Monster OID (4 bytes starting at offset 3)
+    monster_oid_bytes = packet_data[3:7]
+    # Note: Display as stored in packet (big-endian format), but interpret value as little-endian
     monster_oid = struct.unpack('<I', monster_oid_bytes)[0]
 
-    # Extract Position (4 bytes starting at offset 26)
-    pos_x_bytes = packet_data[26:28]
-    pos_y_bytes = packet_data[28:30]
+    # Extract Position (4 bytes starting at offset 28)
+    pos_bytes = packet_data[28:32]
+    pos_x_bytes = pos_bytes[0:2]
+    pos_y_bytes = pos_bytes[2:4]
 
-    pos_x = struct.unpack('<H', pos_x_bytes)[0]  # unsigned
-    pos_y = struct.unpack('<h', pos_y_bytes)[0]  # signed
+    pos_x = struct.unpack('<H', pos_x_bytes)[0]  # unsigned little-endian
+    pos_y = struct.unpack('<h', pos_y_bytes)[0]  # signed little-endian
 
     # Format output
-    result = f"SPAWN_MONSTER_CONTROL (0x0116 / 278):\n"
-    result += f"  - Monster OID: {' '.join(f'{b:02X}' for b in monster_oid_bytes)} (4 bytes) = 0x{monster_oid:08X} = {monster_oid}\n"
-    result += f"  - Position: {' '.join(f'{b:02X}' for b in packet_data[26:30])} (4 bytes) = X: {pos_x_bytes[0]:02X} {pos_x_bytes[1]:02X} ({pos_x}), Y: {pos_y_bytes[0]:02X} {pos_y_bytes[1]:02X} ({pos_y} as signed)"
+    packet_hex = ' '.join(f'{b:02X}' for b in packet_data)
+    result = f"{packet_hex}\n"
+    result += f"  - Monster OID: {' '.join(f'{b:02X}' for b in monster_oid_bytes)} (4 bytes)\n"
+    result += f"  - Position: {' '.join(f'{b:02X}' for b in pos_bytes)} (4 bytes)"
 
     return result
 
