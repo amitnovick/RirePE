@@ -156,6 +156,11 @@ void AddSendPacket(OutPacket *op, ULONG_PTR addr, bool &bBlock) {
 	AddExtraAll(op);
 
 	if (!g_BufferPool || !g_PacketQueue) {
+		static bool logged_init_error = false;
+		if (!logged_init_error) {
+			DEBUGLOG(L"[PACKET] ERROR: AddSendPacket called but queue not initialized! Packets will be dropped!");
+			logged_init_error = true;
+		}
 		return; // Queue not initialized
 	}
 
@@ -164,6 +169,10 @@ void AddSendPacket(OutPacket *op, ULONG_PTR addr, bool &bBlock) {
 	BYTE* b = g_BufferPool->Allocate(total_size, buffer_index);
 
 	if (!b) {
+		static int alloc_fail_count = 0;
+		if (++alloc_fail_count <= 5 || alloc_fail_count % 50 == 0) {
+			DEBUGLOG(L"[PACKET] ERROR: Failed to allocate buffer for SEND packet (size: " + std::to_wstring(total_size) + L"), dropped! Count: " + std::to_wstring(alloc_fail_count));
+		}
 		return;
 	}
 
@@ -198,6 +207,11 @@ void AddSendPacket(OutPacket *op, ULONG_PTR addr, bool &bBlock) {
 
 void AddRecvPacket(InPacket *ip, ULONG_PTR addr, bool &bBlock) {
 	if (!g_BufferPool || !g_PacketQueue) {
+		static bool logged_init_error = false;
+		if (!logged_init_error) {
+			DEBUGLOG(L"[PACKET] ERROR: AddRecvPacket called but queue not initialized! Packets will be dropped!");
+			logged_init_error = true;
+		}
 		return; // Queue not initialized
 	}
 
@@ -206,6 +220,10 @@ void AddRecvPacket(InPacket *ip, ULONG_PTR addr, bool &bBlock) {
 	BYTE* b = g_BufferPool->Allocate(total_size, buffer_index);
 
 	if (!b) {
+		static int alloc_fail_count = 0;
+		if (++alloc_fail_count <= 5 || alloc_fail_count % 50 == 0) {
+			DEBUGLOG(L"[PACKET] ERROR: Failed to allocate buffer for RECV packet (size: " + std::to_wstring(total_size) + L"), dropped! Count: " + std::to_wstring(alloc_fail_count));
+		}
 		return;
 	}
 

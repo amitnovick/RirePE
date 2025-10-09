@@ -8,7 +8,7 @@
 // Memory pool for packet buffers
 class PacketBufferPool {
 private:
-	static const size_t POOL_SIZE = 64;
+	static const size_t POOL_SIZE = 256;  // Increased from 64 to 256 to handle burst traffic
 	static const size_t BUFFER_SIZE = 8192; // Max packet size
 
 	struct Buffer {

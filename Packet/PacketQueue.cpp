@@ -25,6 +25,10 @@ PacketBufferPool::~PacketBufferPool() {
 BYTE* PacketBufferPool::Allocate(size_t size, size_t &buffer_index) {
 	if (size > BUFFER_SIZE) {
 		// Fallback to regular allocation for oversized packets
+		static int oversized_count = 0;
+		if (++oversized_count <= 5 || oversized_count % 100 == 0) {
+			DEBUGLOG(L"[BUFFER] WARNING: Oversized packet (" + std::to_wstring(size) + L" bytes > " + std::to_wstring(BUFFER_SIZE) + L"), count: " + std::to_wstring(oversized_count));
+		}
 		buffer_index = (size_t)-1;
 		return new BYTE[size];
 	}
@@ -42,6 +46,10 @@ BYTE* PacketBufferPool::Allocate(size_t size, size_t &buffer_index) {
 	LeaveCriticalSection(&cs);
 
 	// Pool exhausted, fallback to regular allocation
+	static int exhaustion_count = 0;
+	if (++exhaustion_count <= 10 || exhaustion_count % 50 == 0) {
+		DEBUGLOG(L"[BUFFER] WARNING: Pool exhausted! Allocating from heap (count: " + std::to_wstring(exhaustion_count) + L")");
+	}
 	buffer_index = (size_t)-1;
 	return new BYTE[size];
 }
@@ -131,7 +139,17 @@ bool AsyncPacketQueue::QueuePacket(BYTE* data, size_t size, size_t buffer_index)
 
 	EnterCriticalSection(&queue_cs);
 	packet_queue.push(qp);
+	size_t queue_size = packet_queue.size();
 	LeaveCriticalSection(&queue_cs);
+
+	// Warn if queue is backing up
+	static size_t max_queue_size = 0;
+	if (queue_size > max_queue_size) {
+		max_queue_size = queue_size;
+		if (max_queue_size > 10 && (max_queue_size % 10 == 0)) {
+			DEBUGLOG(L"[QUEUE] WARNING: Queue depth reached " + std::to_wstring(max_queue_size) + L" packets!");
+		}
+	}
 
 	SetEvent(wake_event);
 	return true;

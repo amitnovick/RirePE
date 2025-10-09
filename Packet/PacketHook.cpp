@@ -86,6 +86,12 @@ void SendPacket_Hook(void *rcx, OutPacket *op) {
 			return _EnterSendPacket(rcx, op);
 		}
 		return;
+	} else {
+		// Skipped because return address matches SendPacket_EH (encrypted header, logged elsewhere)
+		static int skip_count = 0;
+		if (++skip_count <= 3 || skip_count % 500 == 0) {
+			DEBUG(L"[HOOK] SendPacket_Hook: Skipped packet (EH path, count: " + std::to_wstring(skip_count) + L")");
+		}
 	}
 	return _EnterSendPacket(rcx, op);
 }
@@ -259,6 +265,11 @@ void __fastcall ProcessPacket_Hook(void *pCClientSocket, void *edx, InPacket *ip
 		}
 	}
 	else {
+		// Skipped because unk2 != 0x02 (likely internal/encrypted packet)
+		static int filtered_count = 0;
+		if (++filtered_count <= 5 || filtered_count % 500 == 0) {
+			DEBUG(L"[HOOK] ProcessPacket_Hook: Filtered packet (unk2=" + std::to_wstring(ip->unk2) + L", size=" + std::to_wstring(ip->size) + L"), count: " + std::to_wstring(filtered_count) + L")");
+		}
 		_ProcessPacket(pCClientSocket, ip);
 	}
 }
