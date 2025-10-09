@@ -1,69 +1,69 @@
-name: Build Windows 32-bit Binaries
-
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:  # Allows manual trigger from GitHub UI
-
-jobs:
-  build:
-    runs-on: windows-latest  # Uses windows-2022
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v2
-
-    - name: Detect available Windows SDK
-      id: detect-sdk
-      shell: powershell
-      run: |
-        $sdks = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include" -Directory | Select-Object -ExpandProperty Name
-        Write-Host "Available Windows SDK versions: $sdks"
-        $latestSdk = $sdks | Sort-Object -Descending | Select-Object -First 1
-        Write-Host "Using SDK version: $latestSdk"
-        echo "SDK_VERSION=$latestSdk" >> $env:GITHUB_ENV
-
-    - name: Restore NuGet packages
-      run: nuget restore RirePE.sln
-
-    - name: Build Simple library (32-bit)
-      run: msbuild Share/Simple/Simple.sln /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=${{ env.SDK_VERSION }}
-
-    - name: Build Hook library (32-bit)
-      run: msbuild Share/Hook/Hook.sln /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=${{ env.SDK_VERSION }}
-
+#name: Build Windows 32-bit Binaries
+#
+#on:
+#  push:
+#    branches: [ main, master ]
+#  pull_request:
+#    branches: [ main, master ]
+#  workflow_dispatch:  # Allows manual trigger from GitHub UI
+#
+#jobs:
+#  build:
+#    runs-on: windows-latest  # Uses windows-2022
+#
+#    steps:
+#    - name: Checkout code
+#      uses: actions/checkout@v4
+#
+#    - name: Add MSBuild to PATH
+#      uses: microsoft/setup-msbuild@v2
+#
+#    - name: Detect available Windows SDK
+#      id: detect-sdk
+#      shell: powershell
+#      run: |
+#        $sdks = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include" -Directory | Select-Object -ExpandProperty Name
+#        Write-Host "Available Windows SDK versions: $sdks"
+#        $latestSdk = $sdks | Sort-Object -Descending | Select-Object -First 1
+#        Write-Host "Using SDK version: $latestSdk"
+#        echo "SDK_VERSION=$latestSdk" >> $env:GITHUB_ENV
+#
+#    - name: Restore NuGet packages
+#      run: nuget restore RirePE.sln
+#
+#    - name: Build Simple library (32-bit)
+#      run: msbuild Share/Simple/Simple.sln /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=${{ env.SDK_VERSION }}
+#
+#    - name: Build Hook library (32-bit)
+#      run: msbuild Share/Hook/Hook.sln /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=${{ env.SDK_VERSION }}
+#
 #    - name: Build Packet.dll (32-bit only)
 #      run: msbuild Packet/Packet.vcxproj /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=${{ env.SDK_VERSION }}
-
+#
 # test
-    - name: Build RirePE (32-bit) and Packet.dll (32-bit)
-      run: msbuild RirePE.sln /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=${{ env.SDK_VERSION }}
-
-    - name: List build outputs
-      shell: powershell
-      run: |
-        Write-Host "Build outputs:"
-        Get-ChildItem -Recurse -Include *.exe,*.dll | Where-Object { $_.Directory -like "*Release*" }
-
-    - name: Upload RirePE.exe artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: RirePE-32bit
-        path: |
-          **/Release/RirePE.exe
-          **/Win32/Release/RirePE.exe
-        if-no-files-found: error
-
-    - name: Upload Packet.dll artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Packet-32bit
-        path: |
-          **/Release/Packet.dll
-          **/Win32/Release/Packet.dll
-        if-no-files-found: error
+#    - name: Build RirePE (32-bit) and Packet.dll (32-bit)
+#      run: msbuild RirePE.sln /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=${{ env.SDK_VERSION }}
+#
+#    - name: List build outputs
+#      shell: powershell
+#      run: |
+#        Write-Host "Build outputs:"
+#        Get-ChildItem -Recurse -Include *.exe,*.dll | Where-Object { $_.Directory -like "*Release*" }
+#
+#    - name: Upload RirePE.exe artifact
+#      uses: actions/upload-artifact@v4
+#      with:
+#        name: RirePE-32bit
+#        path: |
+#          **/Release/RirePE.exe
+#          **/Win32/Release/RirePE.exe
+#        if-no-files-found: error
+#
+#    - name: Upload Packet.dll artifact
+#      uses: actions/upload-artifact@v4
+#      with:
+#        name: Packet-32bit
+#        path: |
+#          **/Release/Packet.dll
+#          **/Win32/Release/Packet.dll
+#        if-no-files-found: error

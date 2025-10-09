@@ -351,3 +351,5 @@ MigrationBackup/
 
 # MyLib - Commented out to include Share library in repo
 # Share/
+
+packet-monitor-*.log

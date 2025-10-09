@@ -173,18 +173,40 @@ class PacketMonitor:
 
     def log_packet(self, msg):
         """Log a packet message to file"""
+        # Don't log DECODE_END packets
+        if msg['header'] == MessageHeader.DECODE_END:
+            return
+
         self.packet_count += 1
         timestamp = datetime.now().strftime('%H:%M:%S.%f')[:-3]
 
         direction = '>>>' if msg['header'] == MessageHeader.SENDPACKET else '<<<'
 
         log_line = f"\n[{self.packet_count}] {timestamp} {direction} {msg['header_name']}\n"
-        log_line += f"  ID: {msg['id']}, Addr: 0x{msg['addr']:016X}\n"
 
-        if 'packet_data' in msg:
-            log_line += f"  Length: {msg['packet_length']}\n"
-            log_line += f"  Data: {self.format_hex(msg['packet_data'])}\n"
-            log_line += f"  Hex: {msg['packet_data'].hex()}\n"
+        # For SENDPACKET and RECVPACKET, use modified format
+        if msg['header'] in (MessageHeader.SENDPACKET, MessageHeader.RECVPACKET):
+            if 'packet_data' in msg and len(msg['packet_data']) >= 2:
+                # Extract first 2 bytes (4 hex digits): LL (left byte) and RR (right byte)
+                first_2_bytes = msg['packet_data'][:2]
+                LL = first_2_bytes[0]  # Left byte
+                RR = first_2_bytes[1]  # Right byte
+                header_value = f"0x{RR:02X}{LL:02X}"
+                log_line += f"  Header: {header_value}\n"
+                # Write full data without truncating
+                log_line += f"  Data: {msg['packet_data'].hex()}\n"
+            else:
+                # If data is less than 2 bytes, show what we have
+                log_line += f"  Header: (insufficient data)\n"
+                if 'packet_data' in msg:
+                    log_line += f"  Data: {msg['packet_data'].hex()}\n"
+        else:
+            # For other message types, keep original format
+            log_line += f"  ID: {msg['id']}, Addr: 0x{msg['addr']:016X}\n"
+            if 'packet_data' in msg:
+                log_line += f"  Length: {msg['packet_length']}\n"
+                log_line += f"  Data: {self.format_hex(msg['packet_data'])}\n"
+                log_line += f"  Hex: {msg['packet_data'].hex()}\n"
 
         if self.log_file:
             self.log_file.write(log_line)
