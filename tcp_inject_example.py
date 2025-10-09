@@ -161,8 +161,11 @@ def parse_spawn_monster_control(packet_data):
     pos_x = struct.unpack('<H', pos_x_bytes)[0]  # unsigned little-endian
     pos_y = struct.unpack('<h', pos_y_bytes)[0]  # signed little-endian
 
-    # Format output
-    packet_hex = ' '.join(f'{b:02X}' for b in packet_data)
+    # Format output - swap header bytes for display (show as big-endian)
+    header_display = f"{packet_data[1]:02X} {packet_data[0]:02X}"
+    rest_of_packet = ' '.join(f'{b:02X}' for b in packet_data[2:])
+    packet_hex = f"{header_display} {rest_of_packet}"
+
     result = f"{packet_hex}\n"
     result += f"  - Monster OID: {' '.join(f'{b:02X}' for b in monster_oid_bytes)} (4 bytes)\n"
     result += f"  - Position: {' '.join(f'{b:02X}' for b in pos_bytes)} (4 bytes)"
