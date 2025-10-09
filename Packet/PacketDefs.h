@@ -8,9 +8,9 @@
 // TCP Configuration (replaces pipe names)
 #define DEFAULT_TCP_PORT 8275
 
-// Removed pipe names - no longer using named pipes:
-// #define PE_LOGGER_PIPE_NAME L"PacketLogger"
-// #define PE_SENDER_PIPE_NAME L"PacketSender"
+// Pipe names - will be removed in Phase 2.8 when helper functions are deleted
+#define PE_LOGGER_PIPE_NAME L"PacketLogger"
+#define PE_SENDER_PIPE_NAME L"PacketSender"
 
 #pragma pack(push, 1)
 

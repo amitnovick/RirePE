@@ -1,4 +1,5 @@
 ﻿#include"../Share/Simple/Simple.h"
+#include"../Share/Simple/DebugLog.h"
 #include"PacketDefs.h"
 #include"PacketQueue.h"
 #include"PacketLogging.h"
