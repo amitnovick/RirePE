@@ -79,21 +79,27 @@ bool RestartTCPClient() {
 
 // Abstract send/recv functions (called from PacketQueue)
 bool SendPacketDataTCP(BYTE *bData, ULONG_PTR uLength) {
+	// Get client pointer atomically
 	EnterCriticalSection(&tcp_client_cs);
-	bool success = false;
-	if (current_client) {
-		success = current_client->Send(bData, uLength);
-	}
+	TCPServerThread *client = current_client;
 	LeaveCriticalSection(&tcp_client_cs);
-	return success;
+
+	// Send outside critical section to avoid blocking
+	if (client) {
+		return client->Send(bData, uLength);
+	}
+	return false;
 }
 
 bool RecvPacketDataTCP(std::vector<BYTE> &vData) {
+	// Get client pointer atomically
 	EnterCriticalSection(&tcp_client_cs);
-	bool success = false;
-	if (current_client) {
-		success = current_client->Recv(vData);
-	}
+	TCPServerThread *client = current_client;
 	LeaveCriticalSection(&tcp_client_cs);
-	return success;
+
+	// Recv outside critical section to avoid blocking/deadlock
+	if (client) {
+		return client->Recv(vData);
+	}
+	return false;
 }
