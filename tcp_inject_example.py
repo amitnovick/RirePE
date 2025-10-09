@@ -30,7 +30,6 @@ class RirePETCPClient:
         """Connect to DLL TCP server"""
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((self.host, self.port))
-        print(f"[✓] Connected to {self.host}:{self.port}")
 
     def recv_message(self):
         """Receive framed TCP message from DLL"""
@@ -80,7 +79,6 @@ class RirePETCPClient:
         frame = struct.pack('<II', TCP_MESSAGE_MAGIC, len(message)) + message
 
         self.sock.sendall(frame)
-        print(f"[→] Sent {header_type} injection command ({len(packet_bytes)} bytes)")
 
     def parse_packet_message(self, data):
         """Parse PacketEditorMessage from received data"""
@@ -124,7 +122,6 @@ class RirePETCPClient:
         """Close connection"""
         if self.sock:
             self.sock.close()
-            print("[✓] Disconnected")
 
     def _recv_exact(self, n):
         """Receive exactly n bytes"""
@@ -137,31 +134,55 @@ class RirePETCPClient:
         return data
 
 
+def parse_spawn_monster_control(packet_data):
+    """
+    Parse 0x116 SPAWN_MONSTER_CONTROL packet
+
+    Format:
+    - Header: 2 bytes (0x116)
+    - Monster OID: 4 bytes at offset 2
+    - Position X: 2 bytes at offset 26 (little-endian)
+    - Position Y: 2 bytes at offset 28 (little-endian, signed)
+    """
+    if len(packet_data) < 30:
+        return "Packet too short for SPAWN_MONSTER_CONTROL"
+
+    # Extract Monster OID (4 bytes starting at offset 2)
+    monster_oid_bytes = packet_data[2:6]
+    monster_oid = struct.unpack('<I', monster_oid_bytes)[0]
+
+    # Extract Position (4 bytes starting at offset 26)
+    pos_x_bytes = packet_data[26:28]
+    pos_y_bytes = packet_data[28:30]
+
+    pos_x = struct.unpack('<H', pos_x_bytes)[0]  # unsigned
+    pos_y = struct.unpack('<h', pos_y_bytes)[0]  # signed
+
+    # Format output
+    result = f"SPAWN_MONSTER_CONTROL (0x0116 / 278):\n"
+    result += f"  - Monster OID: {' '.join(f'{b:02X}' for b in monster_oid_bytes)} (4 bytes) = 0x{monster_oid:08X} = {monster_oid}\n"
+    result += f"  - Position: {' '.join(f'{b:02X}' for b in packet_data[26:30])} (4 bytes) = X: {pos_x_bytes[0]:02X} {pos_x_bytes[1]:02X} ({pos_x}), Y: {pos_y_bytes[0]:02X} {pos_y_bytes[1]:02X} ({pos_y} as signed)"
+
+    return result
+
+
 def main():
     """
     Example workflow:
     1. Wait for RECVPACKET from game server
-    2. When specific packet arrives, respond with SENDPACKET
-    3. Disconnect and exit
+    2. When 0x116 packet arrives, parse and print it, respond with 0x004E packet
+    3. Continue monitoring (does not disconnect)
     """
 
     # Configuration
     HOST = '127.0.0.1'
     PORT = 9999
 
-    # Target packet header to watch for (example: 0x1234)
-    TARGET_RECV_HEADER = 0x1234
+    # Target packet header to watch for (0x116 = SPAWN_MONSTER_CONTROL)
+    TARGET_RECV_HEADER = 0x116
 
-    # Response packet to send (example: header 0x5678 + some data)
-    RESPONSE_PACKET = struct.pack('<H', 0x5678) + b'\x01\x02\x03\x04'
-
-    print("=" * 60)
-    print("TCP Packet Injection Example")
-    print("=" * 60)
-    print(f"Target: {HOST}:{PORT}")
-    print(f"Watching for RECVPACKET with header 0x{TARGET_RECV_HEADER:04X}")
-    print(f"Will respond with SENDPACKET: {RESPONSE_PACKET.hex()}")
-    print("=" * 60)
+    # Response packet to send (header 0x004E + buffer)
+    RESPONSE_PACKET = struct.pack('<H', 0x004E) + bytes.fromhex('C2 C5 D3 04 02 04 00 00 00 01 00'.replace(' ', ''))
 
     client = RirePETCPClient(HOST, PORT)
 
@@ -170,13 +191,10 @@ def main():
         client.connect()
 
         # Step 2: Monitor incoming packets
-        print("\n[⏳] Waiting for packets from game server...")
-
         while True:
             # Receive message from DLL
             data = client.recv_message()
             if not data:
-                print("[!] Connection closed by server")
                 break
 
             # Parse the message
@@ -185,54 +203,38 @@ def main():
                 continue
 
             # Handle different message types
-            if msg['header'] == SENDPACKET:
-                # Outgoing packet (game → server)
-                packet_hex = msg['binary']['packet'].hex()
-                print(f"[←] SENDPACKET #{msg['id']}: {packet_hex}")
-
-            elif msg['header'] == RECVPACKET:
+            if msg['header'] == RECVPACKET:
                 # Incoming packet (server → game)
                 packet_data = msg['binary']['packet']
-                packet_hex = packet_data.hex()
 
                 # Extract header (first 2 bytes, little-endian)
                 if len(packet_data) >= 2:
                     packet_header = struct.unpack('<H', packet_data[0:2])[0]
-                    print(f"[→] RECVPACKET #{msg['id']}: Header=0x{packet_header:04X} Data={packet_hex}")
 
-                    # Check if this is our target packet
+                    # Check if this is our target packet (0x116)
                     if packet_header == TARGET_RECV_HEADER:
-                        print(f"\n[!] Target packet detected (0x{TARGET_RECV_HEADER:04X})!")
-                        print(f"[!] Injecting response packet...")
+                        # Parse and print the 0x116 packet
+                        parsed_info = parse_spawn_monster_control(packet_data)
+                        print(parsed_info)
 
-                        # Step 3: Inject response SENDPACKET
+                        # Inject response SENDPACKET
                         client.send_inject_packet(SENDPACKET, RESPONSE_PACKET)
+                        print(f"\nSent response packet: {RESPONSE_PACKET.hex()}")
 
-                        print(f"[✓] Response packet injected: {RESPONSE_PACKET.hex()}")
-
-                        # Step 4: Disconnect and exit
-                        print(f"\n[!] Mission complete, disconnecting...")
+                        # Disconnect and exit
                         break
-                else:
-                    print(f"[→] RECVPACKET #{msg['id']}: {packet_hex}")
-
-            else:
-                # Format messages (ENCODE/DECODE)
-                if 'extra' in msg:
-                    print(f"[📊] Format message type={msg['header']} "
-                          f"pos={msg['extra']['pos']} size={msg['extra']['size']}")
 
     except KeyboardInterrupt:
-        print("\n[!] Interrupted by user")
+        pass
 
     except Exception as e:
-        print(f"[✗] Error: {e}")
+        print(f"Error: {e}")
         import traceback
         traceback.print_exc()
 
     finally:
         client.disconnect()
-        print("\n[✓] Example completed")
+        print("Client exiting")
 
 
 if __name__ == '__main__':
