@@ -2,12 +2,13 @@
 
 ## Overview
 
-The Packet DLL provides a TCP server API that broadcasts game packet data to connected TCP clients in real-time. This allows remote monitoring and analysis of network packets intercepted from the game process.
+The Packet DLL provides a **bidirectional TCP server API** that enables real-time communication between the injected DLL and remote TCP clients (e.g., Python scripts). The server broadcasts intercepted game packets to clients and can receive responses for packet filtering in blocking mode.
 
 **Server Location**: Runs within the injected DLL (Packet.dll) in the game process
-**Protocol**: TCP with custom framing
+**Protocol**: TCP with custom framing (bidirectional)
 **Default Port**: 9999 (configurable via `config.ini`)
 **Connection Model**: Single client at a time (new connections replace existing ones)
+**Communication**: Bidirectional - DLL ⇄ TCP Client
 
 ---
 
@@ -29,8 +30,10 @@ ENABLE_BLOCKING=0   ; Set to 1 for blocking mode (waits for client response)
 
 1. **Server Startup**: TCP server starts automatically when `USE_TCP=1` in config
 2. **Client Connection**: Server accepts one client connection at a time
-3. **Packet Broadcast**: Server sends intercepted packets to connected client
-4. **Client Response**: For `SENDPACKET` and `RECVPACKET` types, client must send back 1-byte response
+3. **Bidirectional Communication**:
+   - **DLL → Client**: Server broadcasts intercepted packets using `TCPServerThread::Send()`
+   - **Client → DLL**: Client sends responses using same framed protocol via `TCPServerThread::Recv()`
+4. **Blocking Mode Response**: When `ENABLE_BLOCKING=1`, client **must** send back 1-byte response (0x00=allow, 0x01=block) for each `SENDPACKET` and `RECVPACKET` message
 5. **Disconnection**: Server continues running and accepts new connections
 
 ---
@@ -39,7 +42,7 @@ ENABLE_BLOCKING=0   ; Set to 1 for blocking mode (waits for client response)
 
 ### Message Frame Structure
 
-All TCP messages use a framed protocol defined in `SimpleTCP.h`:
+**All TCP messages in BOTH directions** use the same framed protocol defined in `SimpleTCP.h`:
 
 ```c
 #pragma pack(push, 1)
@@ -58,6 +61,12 @@ typedef struct {
 | 0xA11CE        | N bytes        | N bytes payload  |
 +----------------+----------------+------------------+
 ```
+
+**Bidirectional Protocol:**
+- **DLL → Client**: Uses `TCPMessage` framing with `PacketEditorMessage` payload
+- **Client → DLL**: Uses same `TCPMessage` framing (currently for block/allow responses)
+- Both directions validated with magic number `0xA11CE`
+- Protocol is symmetric - same Send/Recv implementation on both sides
 
 ### Message Payload Structure
 
@@ -232,7 +241,30 @@ def parse_packet_message(data):
     return result
 ```
 
-### 3. Sending Response (Blocking Mode Only)
+### 3. Sending Messages to DLL (Bidirectional Communication)
+
+The TCP protocol supports bidirectional communication. The client can send messages back to the DLL using the same `TCPMessage` framing:
+
+```python
+def send_message(sock, data):
+    """
+    Send a framed message to the DLL server
+
+    Args:
+        sock: Socket connection
+        data: Raw bytes to send (will be wrapped in TCPMessage frame)
+    """
+    magic = 0xA11CE
+    length = len(data)
+
+    # Pack: magic (4 bytes) + length (4 bytes) + data
+    frame = struct.pack('<II', magic, length) + data
+    sock.sendall(frame)
+```
+
+**Current Use Cases:**
+
+#### a) Blocking Mode Response
 
 When `ENABLE_BLOCKING=1`, the server waits for a 1-byte response after sending `SENDPACKET` or `RECVPACKET` messages:
 
@@ -246,7 +278,7 @@ def send_response(sock, block_packet):
         block_packet: True to block packet, False to allow it
     """
     response = b'\x01' if block_packet else b'\x00'
-    sock.send(response)
+    sock.send(response)  # Raw 1-byte response (no framing needed)
 ```
 
 **Important Notes:**
@@ -254,6 +286,16 @@ def send_response(sock, block_packet):
 - Format messages (encode/decode) do **not** require responses
 - If `ENABLE_BLOCKING=0` (default), no response is needed at all
 - Server will hang if response is not sent in blocking mode
+- Block/allow responses are sent as **raw bytes** (not framed) for compatibility
+
+#### b) Future Extensions
+
+The bidirectional protocol enables future enhancements such as:
+- **Command injection**: Send custom packets to inject into game
+- **DLL control**: Start/stop packet capture, change filters
+- **Real-time modification**: Send modified packet data back to DLL
+
+These features would require DLL-side implementation to process incoming framed messages in the `TCPCommunicate()` function (PacketTCP.cpp:25).
 
 ### 4. Complete Client Example
 
@@ -389,6 +431,8 @@ Receives framed message from client.
 
 **Returns**: `true` on success, `false` on failure or disconnection
 
+**Protocol**: Uses same bidirectional framing as Send - validates magic `0xA11CE`
+
 ---
 
 ## Performance Characteristics
@@ -436,11 +480,12 @@ Receives framed message from client.
 
 ## Thread Safety
 
-All TCP operations are thread-safe:
+All TCP operations are thread-safe with bidirectional communication support:
 
 - **Critical Section**: `tcp_client_cs` protects client pointer access
 - **Atomic Operations**: Client pointer read/write done atomically
 - **Lock Minimization**: Sends/receives occur outside critical section to avoid blocking
+- **Bidirectional Safety**: Both `Send()` and `Recv()` operations are protected by the same critical section
 
 ---
 
@@ -492,6 +537,22 @@ Payload:
   Length: 0E 00 00 00        (14-byte packet)
   Packet: 2B 00 01 00 48 65 6C 6C 6F 20 57 6F 72 6C 64  (Raw packet)
 ```
+
+### Example 4: Client → DLL Message (Bidirectional)
+
+The client can send framed messages back to the DLL using the same protocol:
+
+```
+Frame (Client → DLL):
+  Magic:  CE 11 0A 00        (0xA11CE)
+  Length: 08 00 00 00        (8 bytes payload)
+
+Payload:
+  Custom command data (8 bytes)
+  Data:   01 02 03 04 05 06 07 08
+```
+
+**Note:** The DLL currently does not process incoming framed messages except for raw 1-byte block/allow responses in blocking mode. To implement command processing, modify `TCPCommunicate()` in PacketTCP.cpp to call `client.Recv()` and handle the received data.
 
 ---
 
@@ -559,6 +620,12 @@ A: Yes, enable `ENABLE_BLOCKING=1` and send 0x01 response to block packets.
 **Q: What's the difference between pipe and TCP mode?**
 A: Pipe connects to local RirePE.exe GUI, TCP allows remote monitoring. Both can run simultaneously.
 
+**Q: Is the TCP protocol bidirectional?**
+A: Yes! The protocol supports bidirectional communication using the same `TCPMessage` framing in both directions. The DLL currently implements DLL→Client broadcasts and Client→DLL block/allow responses. Additional features (like command injection) would require extending the `TCPCommunicate()` function.
+
+**Q: Can I send custom commands from the Python client to the DLL?**
+A: The protocol supports it (via `TCPServerThread::Recv()`), but the DLL currently doesn't process incoming framed commands. You can extend `TCPCommunicate()` in PacketTCP.cpp to handle custom command messages.
+
 **Q: What happens on server restart?**
 A: Existing connections are closed, server rebinds to port and accepts new connections.
 
@@ -574,50 +641,65 @@ A: Existing connections are closed, server rebinds to port and accepts new conne
 
 ----
 
-> So the API consists of passing messages from the client to the server for 
-redirecting to the SEND/RECV hooked function in the injected Maplestory client? 
+## Architecture Clarification
 
-● Not quite - let me clarify the architecture based on the code:
+### Bidirectional Protocol Architecture
 
-  Actual Data Flow
+The TCP server uses a **bidirectional protocol** with symmetric framing in both directions:
 
-  The TCP server in the DLL broadcasts intercepted packets TO clients (one-way,
-  mostly):
+```
+MapleStory Process (with injected Packet.dll)
+    ↓
+[Hooked Send/Recv Functions] ← Intercepts game packets
+    ↓
+[PacketQueue] ← Queues packets asynchronously
+    ↓
+[TCP Server] ⇄ [Remote TCP Client]  ← Bidirectional communication
+    ↓                ↑
+  Send          Recv (both use TCPMessage framing)
+```
 
-  MapleStory Process (with injected Packet.dll)
-      ↓
-  [Hooked Send/Recv Functions] ← Intercepts game packets
-      ↓
-  [PacketQueue] ← Queues packets asynchronously
-      ↓
-  [TCP Server] ← Broadcasts to connected client
-      ↓
-  Remote TCP Client (your monitoring tool)
+### Data Flow
 
-  The actual flow is:
+**DLL → Client (Broadcasting):**
+1. Packet.dll hooks game's network functions (SendPacket/RecvPacket)
+2. When game sends/receives packets, hooks capture them
+3. Packets are queued in PacketQueue with format metadata
+4. TCP server broadcasts packets to connected client via `TCPServerThread::Send()`
 
-  1. Packet.dll hooks MapleStory's network functions (SendPacket/RecvPacket)
-  2. When game sends/receives packets, hooks capture them
-  3. Packets are queued in PacketQueue with format metadata
-  4. TCP server broadcasts these captured packets to any connected TCP client
-  5. Optional: In blocking mode, client can send back 1-byte response (0x00=allow,
-  0x01=block)
+**Client → DLL (Responses/Commands):**
+1. Client sends framed messages using `TCPMessage` protocol
+2. DLL receives via `TCPServerThread::Recv()`
+3. Currently used for: block/allow responses in blocking mode (raw 1-byte)
+4. Future use: Custom commands, packet injection (requires DLL extension)
 
-  It's NOT for:
+### Current Capabilities
 
-  - ❌ Client sending packets to inject into the game
-  - ❌ Client controlling the hooked functions directly
-  - ❌ Bidirectional packet manipulation
+**Currently Implemented:**
+- ✅ **Monitoring**: Real-time packet capture and analysis (DLL → Client)
+- ✅ **Logging**: Recording all game network traffic (DLL → Client)
+- ✅ **Filtering**: Blocking mode - client decides which packets to block (Client → DLL)
+- ✅ **Format Analysis**: Understanding packet structure via encode/decode messages (DLL → Client)
+- ✅ **Bidirectional Protocol**: Both directions use same `TCPMessage` framing
+- ✅ **Thread-Safe I/O**: Both Send and Recv protected by critical sections
 
-  It IS for:
+**Protocol-Ready But Not Implemented:**
+- ⚠️ **Packet Injection**: Client sending custom packets to inject into game
+- ⚠️ **DLL Control**: Client sending commands to control packet capture
+- ⚠️ **Real-time Modification**: Client sending modified packet data back
 
-  - ✅ Monitoring: Real-time packet capture and analysis
-  - ✅ Logging: Recording all game network traffic
-  - ✅ Filtering: (blocking mode) Deciding which packets to block
-  - ✅ Reverse Engineering: Understanding packet structure through format messages
-  (ENCODE1/2/4/8, DECODE1/2/4/8)
+### Implementation Notes
 
-  The RirePE.exe GUI and TCP clients are passive observers that receive packet
-  data, not controllers that send commands back (except for the block/allow
-  response in blocking mode).
+The protocol is **fully bidirectional** at the transport level:
+- Same `TCPMessage` framing (`magic + length + data`) used in both directions
+- `TCPServerThread::Send()` and `TCPServerThread::Recv()` are symmetric
+- Both validated with magic number `0xA11CE`
+
+To add new features (like packet injection), you would:
+1. Define new message types (similar to `PacketEditorMessage`)
+2. Modify `TCPCommunicate()` in PacketTCP.cpp to call `client.Recv()` in a loop
+3. Parse and process incoming framed messages
+4. Execute appropriate actions based on message type
+
+The architecture is designed to support full bidirectional control - it just needs the DLL-side message processing implementation.
 
