@@ -31,9 +31,6 @@ typedef struct {
 	ULONG_PTR addr_DecodeBuffer;
 } HookSettings;
 
-std::wstring GetPipeNameLogger();
-std::wstring GetPipeNameSender();
-
 bool PacketHook_Conf(HookSettings &hs);
 bool PacketHook_Thread(HookSettings &hs);
 
