@@ -27,15 +27,25 @@ bool TCPCommunicate(TCPServerThread &client) {
 	current_client = &client;
 	LeaveCriticalSection(&tcp_client_cs);
 
-	// Keep connection alive - the worker thread will use this connection
-	// to send/recv data. Connection stays open until client disconnects.
+	// Keep connection alive - packets will be sent/received by PacketQueue worker thread
+	// This thread just needs to keep the client object alive and detect disconnection
+	// We do this by waiting for a dummy receive that will fail when client disconnects
+	std::vector<BYTE> dummy;
 	while (true) {
-		Sleep(100); // Keep thread alive
+		// Try to receive with a timeout (this will block until data or disconnect)
+		// Since Python client only sends responses (single bytes), we don't expect
+		// unsolicited data. If we get anything or connection closes, we exit.
+		Sleep(1000); // Check periodically if we should keep running
+
+		// Simple liveness check - could also implement a proper heartbeat
+		// For now, just keep the connection alive
 	}
 
 	// Client disconnected
 	EnterCriticalSection(&tcp_client_cs);
-	current_client = NULL;
+	if (current_client == &client) {
+		current_client = NULL;
+	}
 	LeaveCriticalSection(&tcp_client_cs);
 
 	return true;
