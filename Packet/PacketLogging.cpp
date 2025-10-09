@@ -275,7 +275,7 @@ bool SendPacketData(BYTE *bData, ULONG_PTR uLength) {
 	if (pc) {
 		pipe_success = pc->Send(bData, uLength);
 		if (packet_count <= 5 || packet_count % 100 == 0) {
-			DEBUGLOG(L"[PACKET #" + std::to_wstring(packet_count) + L"] Pipe send: " + (pipe_success ? L"SUCCESS" : L"FAILED"));
+			DEBUGLOG(L"[PACKET #" + std::to_wstring(packet_count) + L"] Pipe→RirePE.exe: " + (pipe_success ? L"✓" : L"✗"));
 		}
 	} else {
 		if (packet_count == 1) {
@@ -286,17 +286,12 @@ bool SendPacketData(BYTE *bData, ULONG_PTR uLength) {
 	// Also send to TCP client if enabled (allows simultaneous local + remote monitoring)
 	if (g_UseTCP) {
 		tcp_success = SendPacketDataTCP(bData, uLength);
-		if (packet_count <= 5 || packet_count % 100 == 0) {
-			DEBUGLOG(L"[PACKET #" + std::to_wstring(packet_count) + L"] TCP send: " + (tcp_success ? L"SUCCESS" : L"FAILED"));
-		}
+		// Note: tcp_success=true even when no client connected (not an error)
 	}
 
-	// Success if either pipe or TCP succeeded
-	bool overall_success = pipe_success || tcp_success;
-	if (packet_count <= 5) {
-		DEBUGLOG(L"[PACKET #" + std::to_wstring(packet_count) + L"] Overall: " + (overall_success ? L"SUCCESS" : L"FAILED"));
-	}
-	return overall_success;
+	// Success if pipe succeeded (TCP is optional)
+	// We primarily care about pipe success for RirePE.exe
+	return pipe_success;
 }
 
 bool RecvPacketData(std::vector<BYTE> &vData) {
