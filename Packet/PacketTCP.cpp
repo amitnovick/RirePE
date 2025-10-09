@@ -34,64 +34,32 @@ bool TCPCommunicate(TCPServerThread &client) {
 	LeaveCriticalSection(&tcp_client_cs);
 	DEBUGLOG(L"[TCP] Client pointer stored, ready for communication");
 
-	// Process incoming commands from TCP client (similar to CommunicateThread for pipes)
-	std::vector<BYTE> data;
+	// Keep connection alive for packet broadcasting
+	// Packets are sent via SendPacketDataTCP() from the packet queue worker thread
+	// This thread just needs to stay alive to keep the connection open
+	//
+	// For monitoring clients (packet_monitor.py): they never send data, just receive
+	// For injection clients (tcp_inject_example.py): they send PacketEditorMessage commands
+	//
+	// We stay in a sleep loop and let the connection naturally close when client disconnects
+
+	DEBUGLOG(L"[TCP] Client thread entering keep-alive loop (monitoring mode)");
+
+	// Keep the thread alive while the client is connected
+	// The connection will be used by SendPacketDataTCP() to broadcast packets
+	// When the client disconnects, the socket will be closed and this thread will exit
 	while (true) {
-		// Receive framed message from client
-		if (!client.Recv(data)) {
-			// Connection closed or error
-			DEBUGLOG(L"[TCP] Client disconnected or receive failed");
-			break;
-		}
+		// Just sleep - packets are broadcasted by SendPacketDataTCP() from another thread
+		// This keeps current_client valid for the duration of the connection
+		Sleep(1000);
 
-		DEBUGLOG(L"[TCP] Received " + std::to_wstring(data.size()) + L" bytes from client");
-
-		// Check if this is a packet injection command (PacketEditorMessage)
-		if (data.size() >= sizeof(PacketEditorMessage)) {
-			PacketEditorMessage* pcm = (PacketEditorMessage*)&data[0];
-
-			DEBUGLOG(L"[TCP] PacketEditorMessage parsed:");
-			DEBUGLOG(L"[TCP]   - header: " + std::to_wstring(pcm->header) +
-				L" (SENDPACKET=0, RECVPACKET=1)");
-			DEBUGLOG(L"[TCP]   - id: " + std::to_wstring(pcm->id));
-			DEBUGLOG(L"[TCP]   - addr: 0x" + std::to_wstring(pcm->addr));
-			DEBUGLOG(L"[TCP]   - Binary.length: " + std::to_wstring(pcm->Binary.length));
-
-			// Only inject SENDPACKET and RECVPACKET commands
-			if (pcm->header == SENDPACKET || pcm->header == RECVPACKET) {
-				DEBUGLOG(L"[TCP] Packet injection request: " +
-					std::wstring(pcm->header == SENDPACKET ? L"SENDPACKET" : L"RECVPACKET"));
-
-				// Log first few bytes of packet
-				std::wstring packet_preview = L"[TCP] Packet data (first 16 bytes): ";
-				for (DWORD i = 0; i < min(16, pcm->Binary.length); i++) {
-					wchar_t hex[4];
-					swprintf_s(hex, L"%02X ", pcm->Binary.packet[i]);
-					packet_preview += hex;
-				}
-				DEBUGLOG(packet_preview);
-
-				// Use same injection mechanism as pipe (via timer callback)
-				if (!bToBeInject) {
-					global_data.clear();
-					global_data = data;
-					bToBeInject = true;
-					DEBUGLOG(L"[TCP] Packet queued for injection (bToBeInject=true)");
-				} else {
-					DEBUGLOG(L"[TCP] Injection already pending, dropping packet");
-				}
-			} else {
-				DEBUGLOG(L"[TCP] Ignoring non-injection message type: " + std::to_wstring(pcm->header));
-			}
-		} else {
-			DEBUGLOG(L"[TCP] Received data too small to be PacketEditorMessage (got " +
-				std::to_wstring(data.size()) + L" bytes, need at least " +
-				std::to_wstring(sizeof(PacketEditorMessage)) + L" bytes)");
-		}
+		// TODO: Could add optional injection command handling here in the future
+		// For now, clients are broadcast-only (monitoring mode)
 	}
 
-	// Client disconnected
-	DEBUGLOG(L"[TCP] Client disconnected from TCP server");
+	// Note: This code is unreachable in current implementation
+	// The thread will exit when the socket is closed (handled by destructor)
+	DEBUGLOG(L"[TCP] Client thread exiting");
 	EnterCriticalSection(&tcp_client_cs);
 	if (current_client == &client) {
 		current_client = NULL;
