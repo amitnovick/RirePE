@@ -3,17 +3,35 @@
 #include"../Packet/PacketHook.h"
 #include"PacketDefs.h"
 #include"../Share/Simple/DebugLog.h"
+#include <queue>
 
 bool bInjectorCallback = false;
-bool bToBeInject = false;
-std::vector<BYTE> global_data;
+
+// Replace single-slot injection with a proper queue
+std::queue<std::vector<BYTE>> injection_queue;
+CRITICAL_SECTION injection_queue_cs;
+bool injection_queue_initialized = false;
+
 VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
-	if (!bToBeInject) {
+	// Initialize critical section on first call
+	if (!injection_queue_initialized) {
+		InitializeCriticalSection(&injection_queue_cs);
+		injection_queue_initialized = true;
+	}
+
+	// Check if there's a packet to inject
+	std::vector<BYTE> data;
+	EnterCriticalSection(&injection_queue_cs);
+	if (injection_queue.empty()) {
+		LeaveCriticalSection(&injection_queue_cs);
 		return;
 	}
-	DEBUGLOG(L"PacketInjector: Processing injection request...");
-	std::vector<BYTE> data = global_data;
-	bToBeInject = false;
+	data = injection_queue.front();
+	injection_queue.pop();
+	size_t queue_size = injection_queue.size();
+	LeaveCriticalSection(&injection_queue_cs);
+
+	DEBUGLOG(L"PacketInjector: Processing injection request (remaining in queue: " + std::to_wstring(queue_size) + L")...");
 
 	PacketEditorMessage *pcm = (PacketEditorMessage *)&data[0];
 	DEBUGLOG(L"PacketInjector: Message type = " + std::to_wstring(pcm->header) +

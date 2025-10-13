@@ -6,6 +6,7 @@
 #include"../Share/Simple/DebugLog.h"
 #include"PacketLogging.h"
 #include<vector>
+#include<queue>
 
 // TCP server instance and connected client thread
 TCPServer *ts = NULL;
@@ -21,8 +22,9 @@ extern int g_TCPPort;
 extern void InitTracking();
 
 // External references to packet injection infrastructure (from PacketSender.cpp)
-extern bool bToBeInject;
-extern std::vector<BYTE> global_data;
+extern std::queue<std::vector<BYTE>> injection_queue;
+extern CRITICAL_SECTION injection_queue_cs;
+extern bool injection_queue_initialized;
 
 // Communication callback for TCP server - handles each client connection
 bool TCPCommunicate(TCPServerThread &client) {
@@ -76,14 +78,23 @@ bool TCPCommunicate(TCPServerThread &client) {
 				}
 				DEBUGLOG(packet_preview);
 
-				// Use same injection mechanism as pipe (via timer callback)
-				if (!bToBeInject) {
-					global_data.clear();
-					global_data = data;
-					bToBeInject = true;
-					DEBUGLOG(L"[TCP] Packet queued for injection (bToBeInject=true)");
-				} else {
-					DEBUGLOG(L"[TCP] Injection already pending, dropping packet");
+				// Initialize critical section if needed
+				if (!injection_queue_initialized) {
+					InitializeCriticalSection(&injection_queue_cs);
+					injection_queue_initialized = true;
+				}
+
+				// Queue the packet for injection (thread-safe)
+				EnterCriticalSection(&injection_queue_cs);
+				injection_queue.push(data);
+				size_t queue_size = injection_queue.size();
+				LeaveCriticalSection(&injection_queue_cs);
+
+				DEBUGLOG(L"[TCP] Packet queued for injection (queue size: " + std::to_wstring(queue_size) + L")");
+
+				// Warn if queue is getting large
+				if (queue_size > 10 && queue_size % 10 == 0) {
+					DEBUGLOG(L"[TCP] WARNING: Injection queue depth reached " + std::to_wstring(queue_size) + L" packets!");
 				}
 			} else {
 				DEBUGLOG(L"[TCP] Ignoring non-injection message type: " + std::to_wstring(pcm->header));
