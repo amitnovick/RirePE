@@ -22,6 +22,23 @@ bool InitializeWinsock() {
 }
 
 // ============================================================================
+// Helper function to receive exactly n bytes (replaces MSG_WAITALL)
+// MSG_WAITALL is not fully supported by Wine, so we manually loop
+// ============================================================================
+static bool RecvExact(SOCKET sock, char* buffer, int length) {
+	int total_received = 0;
+	while (total_received < length) {
+		int received = recv(sock, buffer + total_received, length - total_received, 0);
+		if (received <= 0) {
+			// Connection closed or error
+			return false;
+		}
+		total_received += received;
+	}
+	return true;
+}
+
+// ============================================================================
 // TCPServerThread Implementation
 // ============================================================================
 
@@ -87,20 +104,17 @@ bool TCPServerThread::Recv(std::vector<BYTE> &vData) {
 	DWORD magic = 0;
 	DWORD length = 0;
 
-	int received = recv(client_socket, (char*)&magic, sizeof(DWORD), MSG_WAITALL);
-	if (received != sizeof(DWORD) || magic != TCP_MESSAGE_MAGIC) {
+	if (!RecvExact(client_socket, (char*)&magic, sizeof(DWORD)) || magic != TCP_MESSAGE_MAGIC) {
 		return false;
 	}
 
-	received = recv(client_socket, (char*)&length, sizeof(DWORD), MSG_WAITALL);
-	if (received != sizeof(DWORD) || length == 0 || length > 1024 * 1024) {
+	if (!RecvExact(client_socket, (char*)&length, sizeof(DWORD)) || length == 0 || length > 1024 * 1024) {
 		return false;
 	}
 
 	// Allocate buffer and receive data
 	vData.resize(length);
-	received = recv(client_socket, (char*)&vData[0], length, MSG_WAITALL);
-	if (received != (int)length) {
+	if (!RecvExact(client_socket, (char*)&vData[0], length)) {
 		vData.clear();
 		return false;
 	}
@@ -311,20 +325,17 @@ bool TCPClient::Recv(std::vector<BYTE> &vData) {
 	DWORD magic = 0;
 	DWORD length = 0;
 
-	int received = recv(client_socket, (char*)&magic, sizeof(DWORD), MSG_WAITALL);
-	if (received != sizeof(DWORD) || magic != TCP_MESSAGE_MAGIC) {
+	if (!RecvExact(client_socket, (char*)&magic, sizeof(DWORD)) || magic != TCP_MESSAGE_MAGIC) {
 		return false;
 	}
 
-	received = recv(client_socket, (char*)&length, sizeof(DWORD), MSG_WAITALL);
-	if (received != sizeof(DWORD) || length == 0 || length > 1024 * 1024) {
+	if (!RecvExact(client_socket, (char*)&length, sizeof(DWORD)) || length == 0 || length > 1024 * 1024) {
 		return false;
 	}
 
 	// Allocate buffer and receive data
 	vData.resize(length);
-	received = recv(client_socket, (char*)&vData[0], length, MSG_WAITALL);
-	if (received != (int)length) {
+	if (!RecvExact(client_socket, (char*)&vData[0], length)) {
 		vData.clear();
 		return false;
 	}
