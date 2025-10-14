@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <algorithm>
 
 bool bInjectorCallback = false;
 
