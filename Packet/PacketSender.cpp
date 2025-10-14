@@ -285,61 +285,63 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 			return queue_configs[a].injection_interval_ms < queue_configs[b].injection_interval_ms;
 		});
 
-	// Process the highest priority queue
-	std::string queue_name = ready_queue_names[0];
-	QueueConfig& config = queue_configs[queue_name];
-	MultiPacketGroup group = packet_queues[queue_name].front();
-	packet_queues[queue_name].pop();
-	size_t remaining = packet_queues[queue_name].size();
+	// Process ALL ready queues (not just one!) to maximize throughput
+	// Limit to max 10 queues per tick to avoid blocking too long
+	size_t max_queues_per_tick = min(ready_queue_names.size(), 10);
+
+	std::vector<std::tuple<std::string, QueueConfig, MultiPacketGroup, size_t>> groups_to_inject;
+
+	for (size_t q = 0; q < max_queues_per_tick; q++) {
+		std::string queue_name = ready_queue_names[q];
+		QueueConfig& config = queue_configs[queue_name];
+		MultiPacketGroup group = packet_queues[queue_name].front();
+		packet_queues[queue_name].pop();
+		size_t remaining = packet_queues[queue_name].size();
+
+		groups_to_inject.push_back(std::make_tuple(queue_name, config, group, remaining));
+	}
 
 	LeaveCriticalSection(&injection_queue_cs);
 
-	// Update timestamps for all packets in the group
+	// Now inject all groups outside the critical section
 	DWORD new_timestamp = GetCurrentTimeMs();
-	for (size_t i = 0; i < group.packets.size(); i++) {
-		if (i >= config.timestamp_configs.size()) {
-			break;
-		}
 
-		TimestampConfig& ts_config = config.timestamp_configs[i];
-		if (ts_config.needs_update) {
-			PacketEditorMessage *pcm = (PacketEditorMessage *)&group.packets[i][0];
-			if (pcm->header == SENDPACKET) {
-				// Update all configured timestamp offsets
-				for (DWORD offset : ts_config.offsets) {
-					if (offset + 4 <= pcm->Binary.length) {
-						*(DWORD *)&pcm->Binary.packet[offset] = new_timestamp;
-						DEBUGLOG(L"[INJECT] Packet " + std::to_wstring(i + 1) +
-							L": Updated timestamp at offset 0x" + std::to_wstring(offset) +
-							L" to " + std::to_wstring(new_timestamp));
-					} else {
-						DEBUGLOG(L"[INJECT] WARNING: Packet " + std::to_wstring(i + 1) +
-							L": Timestamp offset 0x" + std::to_wstring(offset) +
-							L" is out of bounds (packet length=" + std::to_wstring(pcm->Binary.length) + L")");
+	for (auto& tuple : groups_to_inject) {
+		std::string queue_name = std::get<0>(tuple);
+		QueueConfig config = std::get<1>(tuple);
+		MultiPacketGroup group = std::get<2>(tuple);
+		size_t remaining = std::get<3>(tuple);
+
+		// Update timestamps for all packets in the group
+		for (size_t i = 0; i < group.packets.size(); i++) {
+			if (i >= config.timestamp_configs.size()) {
+				break;
+			}
+
+			TimestampConfig& ts_config = config.timestamp_configs[i];
+			if (ts_config.needs_update) {
+				PacketEditorMessage *pcm = (PacketEditorMessage *)&group.packets[i][0];
+				if (pcm->header == SENDPACKET) {
+					// Update all configured timestamp offsets
+					for (DWORD offset : ts_config.offsets) {
+						if (offset + 4 <= pcm->Binary.length) {
+							*(DWORD *)&pcm->Binary.packet[offset] = new_timestamp;
+						}
 					}
 				}
 			}
 		}
+
+		// Inject all packets in the group in order
+		for (size_t i = 0; i < group.packets.size(); i++) {
+			InjectSinglePacket(group.packets[i]);
+		}
+
+		// Update last injection time
+		EnterCriticalSection(&injection_queue_cs);
+		queue_configs[queue_name].last_injection_time_ms = current_time_ms;
+		LeaveCriticalSection(&injection_queue_cs);
 	}
-
-	// Log injection
-	std::wstring queue_name_w(config.queue_name.begin(), config.queue_name.end());
-	DEBUGLOG(L"[INJECT] Injecting " + std::to_wstring(group.packets.size()) +
-		L" packet(s) from queue '" + queue_name_w + L"' (interval=" +
-		std::to_wstring(config.injection_interval_ms) + L"ms, remaining=" +
-		std::to_wstring(remaining) + L" group(s))");
-
-	// Inject all packets in the group in order
-	for (size_t i = 0; i < group.packets.size(); i++) {
-		DEBUGLOG(L"[INJECT]   Injecting packet " + std::to_wstring(i + 1) + L"/" +
-			std::to_wstring(group.packets.size()));
-		InjectSinglePacket(group.packets[i]);
-	}
-
-	// Update last injection time
-	EnterCriticalSection(&injection_queue_cs);
-	queue_configs[queue_name].last_injection_time_ms = current_time_ms;
-	LeaveCriticalSection(&injection_queue_cs);
 }
 
 decltype(CreateWindowExA) *_CreateWindowExA = NULL;
@@ -348,7 +350,7 @@ HWND WINAPI CreateWindowExA_Hook(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpW
 		HWND hRet = _CreateWindowExA(dwExStyle, lpClassName, lpWindowName, dwStyle, X, Y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
 		if (!bInjectorCallback) {
 			bInjectorCallback = true;
-			SetTimer(hRet, 1337, 50, PacketInjector);
+			SetTimer(hRet, 1337, 10, PacketInjector);  // Increased from 50ms to 10ms (100Hz instead of 20Hz)
 			DEBUG(L"MAIN THREAD OK 2");
 			DEBUGLOG(L"PacketInjector timer callback installed (via CreateWindowExA hook)");
 		}
@@ -366,7 +368,7 @@ BOOL CALLBACK SearchMaple(HWND hwnd, LPARAM lParam) {
 				if (wcscmp(wcClassName, L"MapleStoryClass") == 0) {
 					if (!bInjectorCallback) {
 						bInjectorCallback = true;
-						SetTimer(hwnd, 1337, 50, PacketInjector);
+						SetTimer(hwnd, 1337, 10, PacketInjector);  // Increased from 50ms to 10ms (100Hz instead of 20Hz)
 						DEBUG(L"MAIN THREAD OK 1");
 						DEBUGLOG(L"PacketInjector timer callback installed (via SearchMaple)");
 					}
