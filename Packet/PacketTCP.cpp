@@ -1,12 +1,14 @@
-﻿// TCP wrapper implementation - separate file to avoid winsock header conflicts
+// TCP wrapper implementation - Multi-packet queue support
 // This file must be compiled separately and include SimpleTCP.h BEFORE Windows.h
 
 #include"../Share/Simple/SimpleTCP.h"
 #include"../Share/Simple/Simple.h"
 #include"../Share/Simple/DebugLog.h"
 #include"PacketLogging.h"
-#include<vector>
-#include<queue>
+#include <vector>
+#include <queue>
+#include <map>
+#include <string>
 
 // TCP server instance and connected client thread
 TCPServer *ts = NULL;
@@ -21,10 +23,38 @@ extern int g_TCPPort;
 // Initialize tracking (defined in PacketLogging.cpp)
 extern void InitTracking();
 
+// Multi-packet group structure
+struct MultiPacketGroup {
+	std::vector<std::vector<BYTE>> packets;
+	DWORD queued_time_ms;
+};
+
 // External references to packet injection infrastructure (from PacketSender.cpp)
-extern std::queue<std::vector<BYTE>> injection_queue;
+extern std::map<std::string, std::queue<MultiPacketGroup>> packet_queues;
+extern std::map<WORD, std::string> opcode_to_queue_map;
 extern CRITICAL_SECTION injection_queue_cs;
 extern bool injection_queue_initialized;
+
+// Temporary storage for incomplete multi-packet groups being assembled
+struct IncompleteGroup {
+	std::vector<std::vector<BYTE>> packets;
+	DWORD start_time_ms;
+};
+extern std::map<std::string, IncompleteGroup> incomplete_groups;
+
+// Queue management functions (from PacketSender.cpp)
+extern bool RegisterQueue(const QueueConfigMessage& config);
+extern bool UnregisterQueue(const std::string& queue_name);
+extern void ClearAllQueues();
+
+// Queue configuration map (from PacketSender.cpp)
+struct QueueConfig {
+	std::string queue_name;
+	DWORD injection_interval_ms;
+	DWORD last_injection_time_ms;
+	std::vector<WORD> packet_opcodes;
+};
+extern std::map<std::string, QueueConfig> queue_configs;
 
 // Communication callback for TCP server - handles each client connection
 bool TCPCommunicate(TCPServerThread &client) {
@@ -36,11 +66,10 @@ bool TCPCommunicate(TCPServerThread &client) {
 	LeaveCriticalSection(&tcp_client_cs);
 	DEBUGLOG(L"[TCP] Client pointer stored, ready for communication");
 
-	// Process incoming commands from TCP client (similar to CommunicateThread for pipes)
-	// Packets are also sent via SendPacketDataTCP() from the packet queue worker thread
-	//
-	// For monitoring clients (packet_monitor.py): they never send data, just receive
-	// For injection clients (tcp_inject_example.py): they send PacketEditorMessage commands
+	// Process incoming commands from TCP client
+	// Clients can send:
+	// 1. REGISTER_QUEUE messages to configure injection queues
+	// 2. SENDPACKET/RECVPACKET messages to inject packets (grouped by queue)
 
 	std::vector<BYTE> data;
 	while (true) {
@@ -53,18 +82,70 @@ bool TCPCommunicate(TCPServerThread &client) {
 
 		DEBUGLOG(L"[TCP] Received " + std::to_wstring(data.size()) + L" bytes from client");
 
-		// Check if this is a packet injection command (PacketEditorMessage)
+		// Parse message header to determine message type
+		if (data.size() < sizeof(DWORD)) {
+			DEBUGLOG(L"[TCP] Message too small to parse header");
+			continue;
+		}
+
+		// Read message type (first DWORD)
+		MessageHeader msg_type = *(MessageHeader*)&data[0];
+
+		DEBUGLOG(L"[TCP] Message type: " + std::to_wstring(msg_type));
+
+		// Handle REGISTER_QUEUE messages
+		if (msg_type == REGISTER_QUEUE) {
+			if (data.size() < sizeof(MessageHeader) + sizeof(QueueConfigMessage)) {
+				DEBUGLOG(L"[TCP] REGISTER_QUEUE message too small (got " +
+					std::to_wstring(data.size()) + L" bytes, need " +
+					std::to_wstring(sizeof(MessageHeader) + sizeof(QueueConfigMessage)) + L" bytes)");
+				continue;
+			}
+
+			// Extract queue configuration
+			QueueConfigMessage* config = (QueueConfigMessage*)&data[sizeof(MessageHeader)];
+
+			// Register the queue
+			if (RegisterQueue(*config)) {
+				DEBUGLOG(L"[TCP] Successfully registered multi-packet queue via TCP");
+			} else {
+				DEBUGLOG(L"[TCP] Failed to register queue via TCP");
+			}
+			continue;
+		}
+
+		// Handle UNREGISTER_QUEUE messages
+		if (msg_type == UNREGISTER_QUEUE) {
+			if (data.size() < sizeof(MessageHeader) + MAX_QUEUE_NAME_LENGTH) {
+				DEBUGLOG(L"[TCP] UNREGISTER_QUEUE message too small");
+				continue;
+			}
+
+			char queue_name_buf[MAX_QUEUE_NAME_LENGTH];
+			memcpy(queue_name_buf, &data[sizeof(MessageHeader)], MAX_QUEUE_NAME_LENGTH);
+			std::string queue_name(queue_name_buf, strnlen(queue_name_buf, MAX_QUEUE_NAME_LENGTH));
+
+			if (UnregisterQueue(queue_name)) {
+				std::wstring queue_name_w(queue_name.begin(), queue_name.end());
+				DEBUGLOG(L"[TCP] Successfully unregistered queue: " + queue_name_w);
+			} else {
+				std::wstring queue_name_w(queue_name.begin(), queue_name.end());
+				DEBUGLOG(L"[TCP] Failed to unregister queue: " + queue_name_w);
+			}
+			continue;
+		}
+
+		// Handle CLEAR_QUEUES messages
+		if (msg_type == CLEAR_QUEUES) {
+			ClearAllQueues();
+			DEBUGLOG(L"[TCP] Cleared all queue configurations");
+			continue;
+		}
+
+		// Handle SENDPACKET/RECVPACKET messages (packet injection)
 		if (data.size() >= sizeof(PacketEditorMessage)) {
 			PacketEditorMessage* pcm = (PacketEditorMessage*)&data[0];
 
-			DEBUGLOG(L"[TCP] PacketEditorMessage parsed:");
-			DEBUGLOG(L"[TCP]   - header: " + std::to_wstring(pcm->header) +
-				L" (SENDPACKET=0, RECVPACKET=1)");
-			DEBUGLOG(L"[TCP]   - id: " + std::to_wstring(pcm->id));
-			DEBUGLOG(L"[TCP]   - addr: 0x" + std::to_wstring(pcm->addr));
-			DEBUGLOG(L"[TCP]   - Binary.length: " + std::to_wstring(pcm->Binary.length));
-
-			// Only inject SENDPACKET and RECVPACKET commands
 			if (pcm->header == SENDPACKET || pcm->header == RECVPACKET) {
 				DEBUGLOG(L"[TCP] Packet injection request: " +
 					std::wstring(pcm->header == SENDPACKET ? L"SENDPACKET" : L"RECVPACKET"));
@@ -84,20 +165,79 @@ bool TCPCommunicate(TCPServerThread &client) {
 					injection_queue_initialized = true;
 				}
 
-				// Queue the packet for injection (thread-safe)
-				EnterCriticalSection(&injection_queue_cs);
-				injection_queue.push(data);
-				size_t queue_size = injection_queue.size();
-				LeaveCriticalSection(&injection_queue_cs);
-
-				DEBUGLOG(L"[TCP] Packet queued for injection (queue size: " + std::to_wstring(queue_size) + L")");
-
-				// Warn if queue is getting large
-				if (queue_size > 10 && queue_size % 10 == 0) {
-					DEBUGLOG(L"[TCP] WARNING: Injection queue depth reached " + std::to_wstring(queue_size) + L" packets!");
+				// Determine packet opcode
+				WORD opcode = 0;
+				if (pcm->Binary.length >= 2) {
+					opcode = *(WORD*)&pcm->Binary.packet[0];
 				}
+
+				// Look up which queue this opcode belongs to
+				EnterCriticalSection(&injection_queue_cs);
+
+				auto opcode_map_it = opcode_to_queue_map.find(opcode);
+				if (opcode_map_it == opcode_to_queue_map.end()) {
+					LeaveCriticalSection(&injection_queue_cs);
+					DEBUGLOG(L"[TCP] WARNING: No registered queue for opcode 0x" +
+						std::to_wstring(opcode) + L" - packet dropped! Register queue first using REGISTER_QUEUE message.");
+					continue;
+				}
+
+				std::string queue_name = opcode_map_it->second;
+
+				// Get the queue configuration to determine how many packets are expected
+				auto config_it = queue_configs.find(queue_name);
+				if (config_it == queue_configs.end()) {
+					LeaveCriticalSection(&injection_queue_cs);
+					DEBUGLOG(L"[TCP] ERROR: Queue config not found for queue: " +
+						std::wstring(queue_name.begin(), queue_name.end()));
+					continue;
+				}
+
+				QueueConfig& config = config_it->second;
+				size_t expected_packet_count = config.packet_opcodes.size();
+
+				// Get or create incomplete group for this queue
+				IncompleteGroup& incomplete = incomplete_groups[queue_name];
+
+				// If this is the first packet in the group, initialize timestamp
+				if (incomplete.packets.empty()) {
+					incomplete.start_time_ms = GetTickCount();
+				}
+
+				// Add packet to incomplete group
+				incomplete.packets.push_back(data);
+
+				std::wstring queue_name_w(queue_name.begin(), queue_name.end());
+				DEBUGLOG(L"[TCP] Added packet " + std::to_wstring(incomplete.packets.size()) +
+					L"/" + std::to_wstring(expected_packet_count) + L" to queue '" +
+					queue_name_w + L"' (opcode=0x" + std::to_wstring(opcode) + L")");
+
+				// Check if we've received all packets for this group
+				if (incomplete.packets.size() >= expected_packet_count) {
+					// Create complete multi-packet group
+					MultiPacketGroup group;
+					group.packets = incomplete.packets;
+					group.queued_time_ms = incomplete.start_time_ms;
+
+					// Add to packet queue
+					packet_queues[queue_name].push(group);
+					size_t queue_size = packet_queues[queue_name].size();
+
+					DEBUGLOG(L"[TCP] Complete group added to queue '" + queue_name_w +
+						L"' (queue size: " + std::to_wstring(queue_size) + L" group(s))");
+
+					// Clear incomplete group
+					incomplete.packets.clear();
+
+					if (queue_size > 10 && queue_size % 10 == 0) {
+						DEBUGLOG(L"[TCP] WARNING: Queue '" + queue_name_w +
+							L"' depth reached " + std::to_wstring(queue_size) + L" groups!");
+					}
+				}
+
+				LeaveCriticalSection(&injection_queue_cs);
 			} else {
-				DEBUGLOG(L"[TCP] Ignoring non-injection message type: " + std::to_wstring(pcm->header));
+				DEBUGLOG(L"[TCP] Ignoring message type: " + std::to_wstring(pcm->header));
 			}
 		} else {
 			DEBUGLOG(L"[TCP] Received data too small to be PacketEditorMessage (got " +

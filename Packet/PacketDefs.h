@@ -47,6 +47,10 @@ enum MessageHeader {
 	NOTUSED,           // recv not used
 	WHEREFROM,         // not encoded by function
 	UNKNOWN,
+	// New message types for queue configuration
+	REGISTER_QUEUE,    // Register a new injection queue with configuration
+	UNREGISTER_QUEUE,  // Remove a queue registration
+	CLEAR_QUEUES,      // Clear all queue registrations
 };
 
 enum FormatUpdate {
@@ -80,5 +84,29 @@ typedef struct {
 		DWORD status;         // status
 	};
 } PacketEditorMessage;
+
+// Multi-packet queue configuration structures
+// Sent by client to register a new injection queue that can handle multiple packets
+#define MAX_QUEUE_NAME_LENGTH 32
+#define MAX_TIMESTAMP_OFFSETS 8
+#define MAX_PACKETS_PER_QUEUE 8
+
+// Timestamp configuration for a single packet type
+typedef struct {
+	BYTE needs_timestamp_update;              // 1 if timestamp needs to be generated, 0 otherwise
+	BYTE timestamp_offset_count;              // Number of timestamp offsets (0-8)
+	DWORD timestamp_offsets[MAX_TIMESTAMP_OFFSETS];  // Offsets where timestamps should be written (little-endian DWORD)
+	BYTE padding[2];                          // Padding for alignment
+} PacketTimestampConfig;
+
+// Queue configuration for multi-packet injection
+typedef struct {
+	char queue_name[MAX_QUEUE_NAME_LENGTH];  // Queue name (e.g., "GENERAL", "ATTACK", "ITEM_PICK_UP")
+	DWORD injection_interval_ms;              // Injection interval in milliseconds (0 = no delay)
+	BYTE packet_count;                        // Number of packets in this queue (1-8)
+	BYTE padding[3];                          // Padding for alignment
+	WORD packet_opcodes[MAX_PACKETS_PER_QUEUE];  // Packet opcodes in order (e.g., [0x002E, 0x00EF] for MOVE+PICKUP)
+	PacketTimestampConfig timestamp_configs[MAX_PACKETS_PER_QUEUE];  // Timestamp config for each packet
+} QueueConfigMessage;
 
 #pragma pack(pop)
