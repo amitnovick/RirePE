@@ -5,6 +5,7 @@
 #include"../Share/Simple/Simple.h"
 #include"../Share/Simple/DebugLog.h"
 #include"PacketLogging.h"
+#include"PacketDefs.h"
 #include <vector>
 #include <queue>
 #include <map>
@@ -182,31 +183,37 @@ bool TCPCommunicate(TCPServerThread &client) {
 					// Use the legacy direct injection queue
 					std::string legacy_queue_name = "DIRECT";
 
-					// Ensure legacy queue exists
+					// Ensure legacy queue exists (create on first use)
 					auto legacy_config_it = queue_configs.find(legacy_queue_name);
 					if (legacy_config_it == queue_configs.end()) {
-						// Create legacy queue configuration on-demand
-						QueueConfig legacy_config;
-						legacy_config.queue_name = legacy_queue_name;
-						legacy_config.injection_interval_ms = 0;  // No delay for legacy
-						legacy_config.last_injection_time_ms = 0;
-						legacy_config.packet_opcodes.push_back(opcode);  // Single packet
+						// Create legacy queue configuration on-demand using QueueConfigMessage
+						// Use a dummy opcode (0xFFFF) since legacy queue accepts ALL opcodes
+						QueueConfigMessage legacy_msg;
+						memset(&legacy_msg, 0, sizeof(legacy_msg));
 
-						TimestampConfig ts_config;
-						ts_config.needs_update = false;  // Legacy packets have timestamps pre-filled
-						legacy_config.timestamp_configs.push_back(ts_config);
+						// Set queue name
+						strncpy_s(legacy_msg.queue_name, MAX_QUEUE_NAME_LENGTH, legacy_queue_name.c_str(), _TRUNCATE);
 
-						queue_configs[legacy_queue_name] = legacy_config;
+						// No delay for legacy packets (immediate injection)
+						legacy_msg.injection_interval_ms = 0;
 
-						// Initialize empty queue if not exists
-						if (packet_queues.find(legacy_queue_name) == packet_queues.end()) {
-							packet_queues[legacy_queue_name] = std::queue<MultiPacketGroup>();
-						}
+						// Single packet in group
+						legacy_msg.packet_count = 1;
+						legacy_msg.packet_opcodes[0] = 0xFFFF;  // Dummy opcode (not used for routing)
+
+						// No timestamp updates (legacy packets have timestamps pre-filled)
+						legacy_msg.timestamp_configs[0].needs_timestamp_update = 0;
+						legacy_msg.timestamp_configs[0].timestamp_offset_count = 0;
+
+						// Register the legacy queue using the standard registration function
+						RegisterQueue(legacy_msg);
 
 						DEBUGLOG(L"[TCP-LEGACY] Created on-demand legacy queue for backward compatibility");
 					}
 
 					// Create single-packet group and add directly to queue
+					// Note: We do NOT add to opcode_to_queue_map because legacy queue
+					// accepts any opcode that isn't already registered
 					MultiPacketGroup group;
 					group.packets.push_back(data);
 					group.queued_time_ms = GetTickCount();

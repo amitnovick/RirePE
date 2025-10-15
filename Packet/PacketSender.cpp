@@ -71,7 +71,8 @@ bool RegisterQueue(const QueueConfigMessage& config) {
 	QueueConfig qc;
 	qc.queue_name = std::string(config.queue_name, strnlen(config.queue_name, MAX_QUEUE_NAME_LENGTH));
 	qc.injection_interval_ms = config.injection_interval_ms;
-	qc.last_injection_time_ms = 0;
+	// Initialize to current time so first injection waits for the full interval
+	qc.last_injection_time_ms = GetCurrentTimeMs();
 
 	// Copy packet opcodes and timestamp configs
 	for (BYTE i = 0; i < config.packet_count && i < MAX_PACKETS_PER_QUEUE; i++) {
@@ -240,6 +241,9 @@ void InjectSinglePacket(std::vector<BYTE>& data) {
 }
 
 VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
+	static int call_count = 0;
+	call_count++;
+
 	// Initialize critical section on first call
 	if (!injection_queue_initialized) {
 		InitializeCriticalSection(&injection_queue_cs);
@@ -247,6 +251,10 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 	}
 
 	DWORD current_time_ms = GetCurrentTimeMs();
+
+	if (call_count % 100 == 1) {
+		DEBUGLOG(L"[INJECT-TIMER] Tick #" + std::to_wstring(call_count) + L" at " + std::to_wstring(current_time_ms));
+	}
 
 	// Process packets from all registered queues
 	// Priority: queues with shortest intervals first
@@ -266,10 +274,26 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 			continue;
 		}
 
+		// Check if enough time has passed since the packet was queued
+		// This ensures minimum delay between when packet arrives and when it's injected
+		MultiPacketGroup& front_group = queue_it->second.front();
+		DWORD time_since_queued = current_time_ms - front_group.queued_time_ms;
+
 		// Check if enough time has passed since last injection
 		DWORD time_since_last = current_time_ms - config.last_injection_time_ms;
-		if (time_since_last >= config.injection_interval_ms) {
+
+		// Must satisfy BOTH conditions: time since queued AND time since last injection
+		if (time_since_queued >= config.injection_interval_ms &&
+			time_since_last >= config.injection_interval_ms) {
 			ready_queue_names.push_back(queue_name);
+			// Always log for DIRECT queue, otherwise only every 25 ticks
+			if (queue_name == "DIRECT" || call_count % 25 == 1) {
+				std::wstring qname_w(queue_name.begin(), queue_name.end());
+				DEBUGLOG(L"[INJECT-READY] Queue '" + qname_w + L"' ready (depth=" +
+					std::to_wstring(queue_it->second.size()) +
+					L", queued=" + std::to_wstring(time_since_queued) + L"ms" +
+					L", last=" + std::to_wstring(time_since_last) + L"ms)");
+			}
 		}
 	}
 
@@ -277,6 +301,10 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 	if (ready_queue_names.empty()) {
 		LeaveCriticalSection(&injection_queue_cs);
 		return;
+	}
+
+	if (call_count % 25 == 1) {
+		DEBUGLOG(L"[INJECT-START] Processing " + std::to_wstring(ready_queue_names.size()) + L" ready queue(s)");
 	}
 
 	// Sort by interval (shorter intervals = higher priority)
@@ -330,6 +358,14 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 					}
 				}
 			}
+		}
+
+		// Log injection (always log for DIRECT queue, otherwise only every 25 ticks)
+		if (queue_name == "DIRECT" || call_count % 25 == 1) {
+			std::wstring qname_w(queue_name.begin(), queue_name.end());
+			DEBUGLOG(L"[INJECT-DO] Injecting " + std::to_wstring(group.packets.size()) +
+				L" packet(s) from '" + qname_w + L"' (remaining=" +
+				std::to_wstring(remaining) + L" groups)");
 		}
 
 		// Inject all packets in the group in order
