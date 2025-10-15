@@ -175,10 +175,47 @@ bool TCPCommunicate(TCPServerThread &client) {
 				EnterCriticalSection(&injection_queue_cs);
 
 				auto opcode_map_it = opcode_to_queue_map.find(opcode);
+
+				// BACKWARD COMPATIBILITY: If no queue is registered for this opcode,
+				// route it to the legacy "DIRECT" queue for immediate injection
 				if (opcode_map_it == opcode_to_queue_map.end()) {
+					// Use the legacy direct injection queue
+					std::string legacy_queue_name = "DIRECT";
+
+					// Ensure legacy queue exists
+					auto legacy_config_it = queue_configs.find(legacy_queue_name);
+					if (legacy_config_it == queue_configs.end()) {
+						// Create legacy queue configuration on-demand
+						QueueConfig legacy_config;
+						legacy_config.queue_name = legacy_queue_name;
+						legacy_config.injection_interval_ms = 0;  // No delay for legacy
+						legacy_config.last_injection_time_ms = 0;
+						legacy_config.packet_opcodes.push_back(opcode);  // Single packet
+
+						TimestampConfig ts_config;
+						ts_config.needs_update = false;  // Legacy packets have timestamps pre-filled
+						legacy_config.timestamp_configs.push_back(ts_config);
+
+						queue_configs[legacy_queue_name] = legacy_config;
+
+						// Initialize empty queue if not exists
+						if (packet_queues.find(legacy_queue_name) == packet_queues.end()) {
+							packet_queues[legacy_queue_name] = std::queue<MultiPacketGroup>();
+						}
+
+						DEBUGLOG(L"[TCP-LEGACY] Created on-demand legacy queue for backward compatibility");
+					}
+
+					// Create single-packet group and add directly to queue
+					MultiPacketGroup group;
+					group.packets.push_back(data);
+					group.queued_time_ms = GetTickCount();
+					packet_queues[legacy_queue_name].push(group);
+
 					LeaveCriticalSection(&injection_queue_cs);
-					DEBUGLOG(L"[TCP] WARNING: No registered queue for opcode 0x" +
-						std::to_wstring(opcode) + L" - packet dropped! Register queue first using REGISTER_QUEUE message.");
+
+					DEBUGLOG(L"[TCP-LEGACY] Packet routed to DIRECT queue (opcode=0x" +
+						std::to_wstring(opcode) + L") - v1 compatibility mode");
 					continue;
 				}
 
