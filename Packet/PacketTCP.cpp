@@ -94,8 +94,21 @@ bool TCPCommunicate(TCPServerThread &client) {
 			continue;
 		}
 
-		// Read message type (first DWORD)
-		MessageHeader msg_type = *(MessageHeader*)&data[0];
+		// Read message type
+		// For queue management commands (REGISTER_QUEUE, etc), message type is at offset 0
+		// For packet injection (SENDPACKET/RECVPACKET), message type is at offset 32 (after queue_name)
+		MessageHeader msg_type;
+
+		// Check if this looks like a PacketInjectionRequest (starts with queue_name)
+		// Queue names are ASCII strings, so first bytes will be < 128 for valid names
+		// Message type enums are small numbers (0-34), so we can distinguish them
+		if (data.size() >= sizeof(PacketInjectionRequest) && data[0] < 128) {
+			// Likely a PacketInjectionRequest - read MessageHeader from offset 32
+			msg_type = *(MessageHeader*)&data[MAX_QUEUE_NAME_LENGTH];
+		} else {
+			// Queue command - read MessageHeader from offset 0
+			msg_type = *(MessageHeader*)&data[0];
+		}
 
 		DEBUGLOG(L"[TCP] Message type: " + std::to_wstring(msg_type));
 
