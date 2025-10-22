@@ -32,7 +32,6 @@ struct MultiPacketGroup {
 
 // External references to packet injection infrastructure (from PacketSender.cpp)
 extern std::map<std::string, std::queue<MultiPacketGroup>> packet_queues;
-extern std::map<WORD, std::string> opcode_to_queue_map;
 extern CRITICAL_SECTION injection_queue_cs;
 extern bool injection_queue_initialized;
 
@@ -49,11 +48,17 @@ extern bool UnregisterQueue(const std::string& queue_name);
 extern void ClearAllQueues();
 
 // Queue configuration map (from PacketSender.cpp)
+struct TimestampConfig {
+	bool needs_update;
+	std::vector<DWORD> offsets;
+};
+
 struct QueueConfig {
 	std::string queue_name;
 	DWORD injection_interval_ms;
 	DWORD last_injection_time_ms;
-	std::vector<WORD> packet_opcodes;
+	BYTE packet_count;
+	std::vector<TimestampConfig> timestamp_configs;
 };
 extern std::map<std::string, QueueConfig> queue_configs;
 
