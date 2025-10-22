@@ -149,12 +149,18 @@ bool TCPCommunicate(TCPServerThread &client) {
 		}
 
 		// Handle SENDPACKET/RECVPACKET messages (packet injection)
-		if (data.size() >= sizeof(PacketEditorMessage)) {
-			PacketEditorMessage* pcm = (PacketEditorMessage*)&data[0];
+		// Note: Must check message type to avoid misinterpreting queue commands as packets
+		if (msg_type == SENDPACKET || msg_type == RECVPACKET) {
+			if (data.size() < sizeof(PacketEditorMessage)) {
+				DEBUGLOG(L"[TCP] Received data too small to be PacketEditorMessage (got " +
+					std::to_wstring(data.size()) + L" bytes, need at least " +
+					std::to_wstring(sizeof(PacketEditorMessage)) + L" bytes)");
+				continue;
+			}
 
-			if (pcm->header == SENDPACKET || pcm->header == RECVPACKET) {
-				DEBUGLOG(L"[TCP] Packet injection request: " +
-					std::wstring(pcm->header == SENDPACKET ? L"SENDPACKET" : L"RECVPACKET"));
+			PacketEditorMessage* pcm = (PacketEditorMessage*)&data[0];
+			DEBUGLOG(L"[TCP] Packet injection request: " +
+				std::wstring(pcm->header == SENDPACKET ? L"SENDPACKET" : L"RECVPACKET"));
 
 				// Extract queue name from message
 				std::string queue_name(pcm->Binary.queue_name, strnlen(pcm->Binary.queue_name, MAX_QUEUE_NAME_LENGTH));
@@ -226,13 +232,6 @@ bool TCPCommunicate(TCPServerThread &client) {
 				}
 
 				LeaveCriticalSection(&injection_queue_cs);
-			} else {
-				DEBUGLOG(L"[TCP] Ignoring message type: " + std::to_wstring(pcm->header));
-			}
-		} else {
-			DEBUGLOG(L"[TCP] Received data too small to be PacketEditorMessage (got " +
-				std::to_wstring(data.size()) + L" bytes, need at least " +
-				std::to_wstring(sizeof(PacketEditorMessage)) + L" bytes)");
 		}
 	}
 
