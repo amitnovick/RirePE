@@ -24,7 +24,7 @@ struct QueueConfig {
 	std::string queue_name;
 	DWORD injection_interval_ms;
 	DWORD last_injection_time_ms;
-	std::vector<WORD> packet_opcodes;        // List of opcodes in order
+	BYTE packet_count;                       // Number of packets expected in each group
 	std::vector<TimestampConfig> timestamp_configs;  // Timestamp config for each packet
 };
 
@@ -39,9 +39,6 @@ std::map<std::string, QueueConfig> queue_configs;
 
 // Map from queue name to packet queue
 std::map<std::string, std::queue<MultiPacketGroup>> packet_queues;
-
-// Map from opcode to queue name (for quick lookup when routing packets)
-std::map<WORD, std::string> opcode_to_queue_map;
 
 // Temporary storage for incomplete multi-packet groups being assembled
 struct IncompleteGroup {
@@ -71,13 +68,12 @@ bool RegisterQueue(const QueueConfigMessage& config) {
 	QueueConfig qc;
 	qc.queue_name = std::string(config.queue_name, strnlen(config.queue_name, MAX_QUEUE_NAME_LENGTH));
 	qc.injection_interval_ms = config.injection_interval_ms;
+	qc.packet_count = config.packet_count;
 	// Initialize to current time so first injection waits for the full interval
 	qc.last_injection_time_ms = GetCurrentTimeMs();
 
-	// Copy packet opcodes and timestamp configs
+	// Copy timestamp configs
 	for (BYTE i = 0; i < config.packet_count && i < MAX_PACKETS_PER_QUEUE; i++) {
-		qc.packet_opcodes.push_back(config.packet_opcodes[i]);
-
 		TimestampConfig tc;
 		tc.needs_update = config.timestamp_configs[i].needs_timestamp_update != 0;
 		for (BYTE j = 0; j < config.timestamp_configs[i].timestamp_offset_count && j < MAX_TIMESTAMP_OFFSETS; j++) {
@@ -94,23 +90,17 @@ bool RegisterQueue(const QueueConfigMessage& config) {
 		packet_queues[qc.queue_name] = std::queue<MultiPacketGroup>();
 	}
 
-	// Update opcode to queue mapping for each opcode
-	for (WORD opcode : qc.packet_opcodes) {
-		opcode_to_queue_map[opcode] = qc.queue_name;
-	}
-
 	LeaveCriticalSection(&injection_queue_cs);
 
 	std::wstring queue_name_w(qc.queue_name.begin(), qc.queue_name.end());
 	DEBUGLOG(L"[QUEUE] Registered multi-packet queue: " + queue_name_w +
-		L" (packet_count=" + std::to_wstring(qc.packet_opcodes.size()) +
+		L" (packet_count=" + std::to_wstring(qc.packet_count) +
 		L", interval=" + std::to_wstring(config.injection_interval_ms) + L"ms)");
 
-	// Log each packet in the queue
-	for (size_t i = 0; i < qc.packet_opcodes.size(); i++) {
-		DEBUGLOG(L"[QUEUE]   Packet " + std::to_wstring(i + 1) + L": opcode=0x" +
-			std::to_wstring(qc.packet_opcodes[i]) +
-			L", needs_timestamp=" + std::to_wstring(qc.timestamp_configs[i].needs_update) +
+	// Log each packet slot in the queue
+	for (size_t i = 0; i < qc.timestamp_configs.size(); i++) {
+		DEBUGLOG(L"[QUEUE]   Packet " + std::to_wstring(i + 1) +
+			L": needs_timestamp=" + std::to_wstring(qc.timestamp_configs[i].needs_update) +
 			L", timestamp_offsets=" + std::to_wstring(qc.timestamp_configs[i].offsets.size()));
 	}
 
@@ -123,11 +113,6 @@ bool UnregisterQueue(const std::string& queue_name) {
 
 	auto config_it = queue_configs.find(queue_name);
 	if (config_it != queue_configs.end()) {
-		// Remove opcode mappings
-		for (WORD opcode : config_it->second.packet_opcodes) {
-			opcode_to_queue_map.erase(opcode);
-		}
-
 		queue_configs.erase(config_it);
 
 		// Clear the queue
@@ -166,7 +151,6 @@ void ClearAllQueues() {
 
 	packet_queues.clear();
 	queue_configs.clear();
-	opcode_to_queue_map.clear();
 	incomplete_groups.clear();
 
 	LeaveCriticalSection(&injection_queue_cs);

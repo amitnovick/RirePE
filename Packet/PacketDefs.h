@@ -58,6 +58,11 @@ enum FormatUpdate {
 	FORMAT_UPDATE,
 };
 
+// Multi-packet queue configuration constants
+#define MAX_QUEUE_NAME_LENGTH 32
+#define MAX_TIMESTAMP_OFFSETS 8
+#define MAX_PACKETS_PER_QUEUE 8
+
 // Packet editor message structure
 typedef struct {
 	MessageHeader header;
@@ -70,6 +75,7 @@ typedef struct {
 	union {
 		// SEND or RECV
 		struct {
+			char queue_name[MAX_QUEUE_NAME_LENGTH];  // Target queue name
 			DWORD length;     // packet size
 			BYTE packet[1];   // packet data
 		} Binary;
@@ -85,12 +91,6 @@ typedef struct {
 	};
 } PacketEditorMessage;
 
-// Multi-packet queue configuration structures
-// Sent by client to register a new injection queue that can handle multiple packets
-#define MAX_QUEUE_NAME_LENGTH 32
-#define MAX_TIMESTAMP_OFFSETS 8
-#define MAX_PACKETS_PER_QUEUE 8
-
 // Timestamp configuration for a single packet type
 typedef struct {
 	BYTE needs_timestamp_update;              // 1 if timestamp needs to be generated, 0 otherwise
@@ -105,7 +105,6 @@ typedef struct {
 	DWORD injection_interval_ms;              // Injection interval in milliseconds (0 = no delay)
 	BYTE packet_count;                        // Number of packets in this queue (1-8)
 	BYTE padding[3];                          // Padding for alignment
-	WORD packet_opcodes[MAX_PACKETS_PER_QUEUE];  // Packet opcodes in order (e.g., [0x002E, 0x00EF] for MOVE+PICKUP)
 	PacketTimestampConfig timestamp_configs[MAX_PACKETS_PER_QUEUE];  // Timestamp config for each packet
 } QueueConfigMessage;
 

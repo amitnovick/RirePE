@@ -151,8 +151,12 @@ bool TCPCommunicate(TCPServerThread &client) {
 				DEBUGLOG(L"[TCP] Packet injection request: " +
 					std::wstring(pcm->header == SENDPACKET ? L"SENDPACKET" : L"RECVPACKET"));
 
-				// Log first few bytes of packet
-				std::wstring packet_preview = L"[TCP] Packet data (first 16 bytes): ";
+				// Extract queue name from message
+				std::string queue_name(pcm->Binary.queue_name, strnlen(pcm->Binary.queue_name, MAX_QUEUE_NAME_LENGTH));
+				std::wstring queue_name_w(queue_name.begin(), queue_name.end());
+
+				// Log first few bytes of packet (offset by queue_name field)
+				std::wstring packet_preview = L"[TCP] Queue='" + queue_name_w + L"', Packet data (first 16 bytes): ";
 				for (DWORD i = 0; i < min(16, pcm->Binary.length); i++) {
 					wchar_t hex[4];
 					swprintf_s(hex, L"%02X ", pcm->Binary.packet[i]);
@@ -166,79 +170,18 @@ bool TCPCommunicate(TCPServerThread &client) {
 					injection_queue_initialized = true;
 				}
 
-				// Determine packet opcode
-				WORD opcode = 0;
-				if (pcm->Binary.length >= 2) {
-					opcode = *(WORD*)&pcm->Binary.packet[0];
-				}
-
-				// Look up which queue this opcode belongs to
+				// Look up queue configuration
 				EnterCriticalSection(&injection_queue_cs);
 
-				auto opcode_map_it = opcode_to_queue_map.find(opcode);
-
-				// BACKWARD COMPATIBILITY: If no queue is registered for this opcode,
-				// route it to the legacy "DIRECT" queue for immediate injection
-				if (opcode_map_it == opcode_to_queue_map.end()) {
-					// Use the legacy direct injection queue
-					std::string legacy_queue_name = "DIRECT";
-
-					// Ensure legacy queue exists (create on first use)
-					auto legacy_config_it = queue_configs.find(legacy_queue_name);
-					if (legacy_config_it == queue_configs.end()) {
-						// Create legacy queue configuration on-demand using QueueConfigMessage
-						// Use a dummy opcode (0xFFFF) since legacy queue accepts ALL opcodes
-						QueueConfigMessage legacy_msg;
-						memset(&legacy_msg, 0, sizeof(legacy_msg));
-
-						// Set queue name
-						strncpy_s(legacy_msg.queue_name, MAX_QUEUE_NAME_LENGTH, legacy_queue_name.c_str(), _TRUNCATE);
-
-						// No delay for legacy packets (immediate injection)
-						legacy_msg.injection_interval_ms = 0;
-
-						// Single packet in group
-						legacy_msg.packet_count = 1;
-						legacy_msg.packet_opcodes[0] = 0xFFFF;  // Dummy opcode (not used for routing)
-
-						// No timestamp updates (legacy packets have timestamps pre-filled)
-						legacy_msg.timestamp_configs[0].needs_timestamp_update = 0;
-						legacy_msg.timestamp_configs[0].timestamp_offset_count = 0;
-
-						// Register the legacy queue using the standard registration function
-						RegisterQueue(legacy_msg);
-
-						DEBUGLOG(L"[TCP-LEGACY] Created on-demand legacy queue for backward compatibility");
-					}
-
-					// Create single-packet group and add directly to queue
-					// Note: We do NOT add to opcode_to_queue_map because legacy queue
-					// accepts any opcode that isn't already registered
-					MultiPacketGroup group;
-					group.packets.push_back(data);
-					group.queued_time_ms = GetTickCount();
-					packet_queues[legacy_queue_name].push(group);
-
-					LeaveCriticalSection(&injection_queue_cs);
-
-					DEBUGLOG(L"[TCP-LEGACY] Packet routed to DIRECT queue (opcode=0x" +
-						std::to_wstring(opcode) + L") - v1 compatibility mode");
-					continue;
-				}
-
-				std::string queue_name = opcode_map_it->second;
-
-				// Get the queue configuration to determine how many packets are expected
 				auto config_it = queue_configs.find(queue_name);
 				if (config_it == queue_configs.end()) {
 					LeaveCriticalSection(&injection_queue_cs);
-					DEBUGLOG(L"[TCP] ERROR: Queue config not found for queue: " +
-						std::wstring(queue_name.begin(), queue_name.end()));
+					DEBUGLOG(L"[TCP] ERROR: Queue '" + queue_name_w + L"' not registered!");
 					continue;
 				}
 
 				QueueConfig& config = config_it->second;
-				size_t expected_packet_count = config.packet_opcodes.size();
+				size_t expected_packet_count = config.packet_count;
 
 				// Get or create incomplete group for this queue
 				IncompleteGroup& incomplete = incomplete_groups[queue_name];
@@ -251,10 +194,8 @@ bool TCPCommunicate(TCPServerThread &client) {
 				// Add packet to incomplete group
 				incomplete.packets.push_back(data);
 
-				std::wstring queue_name_w(queue_name.begin(), queue_name.end());
 				DEBUGLOG(L"[TCP] Added packet " + std::to_wstring(incomplete.packets.size()) +
-					L"/" + std::to_wstring(expected_packet_count) + L" to queue '" +
-					queue_name_w + L"' (opcode=0x" + std::to_wstring(opcode) + L")");
+					L"/" + std::to_wstring(expected_packet_count) + L" to queue '" + queue_name_w + L"'");
 
 				// Check if we've received all packets for this group
 				if (incomplete.packets.size() >= expected_packet_count) {
