@@ -101,21 +101,30 @@ bool TCPCommunicate(TCPServerThread &client) {
 
 		// Handle REGISTER_QUEUE messages
 		if (msg_type == REGISTER_QUEUE) {
-			if (data.size() < sizeof(MessageHeader) + sizeof(QueueConfigMessage)) {
+			DEBUGLOG(L"[TCP] Processing REGISTER_QUEUE message (size=" + std::to_wstring(data.size()) + L" bytes)");
+
+			size_t expected_size = sizeof(MessageHeader) + sizeof(QueueConfigMessage);
+			if (data.size() < expected_size) {
 				DEBUGLOG(L"[TCP] REGISTER_QUEUE message too small (got " +
 					std::to_wstring(data.size()) + L" bytes, need " +
-					std::to_wstring(sizeof(MessageHeader) + sizeof(QueueConfigMessage)) + L" bytes)");
+					std::to_wstring(expected_size) + L" bytes)");
 				continue;
 			}
 
 			// Extract queue configuration
 			QueueConfigMessage* config = (QueueConfigMessage*)&data[sizeof(MessageHeader)];
 
+			std::string queue_name_str(config->queue_name, strnlen(config->queue_name, MAX_QUEUE_NAME_LENGTH));
+			std::wstring queue_name_w(queue_name_str.begin(), queue_name_str.end());
+			DEBUGLOG(L"[TCP] Registering queue: '" + queue_name_w + L"' (interval=" +
+				std::to_wstring(config->injection_interval_ms) + L"ms, packet_count=" +
+				std::to_wstring(config->packet_count) + L")");
+
 			// Register the queue
 			if (RegisterQueue(*config)) {
-				DEBUGLOG(L"[TCP] Successfully registered multi-packet queue via TCP");
+				DEBUGLOG(L"[TCP] Successfully registered queue: '" + queue_name_w + L"'");
 			} else {
-				DEBUGLOG(L"[TCP] Failed to register queue via TCP");
+				DEBUGLOG(L"[TCP] Failed to register queue: '" + queue_name_w + L"'");
 			}
 			continue;
 		}
