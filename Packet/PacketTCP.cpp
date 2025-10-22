@@ -160,20 +160,24 @@ bool TCPCommunicate(TCPServerThread &client) {
 		// Handle SENDPACKET/RECVPACKET messages (packet injection)
 		// Note: Must check message type to avoid misinterpreting queue commands as packets
 		if (msg_type == SENDPACKET || msg_type == RECVPACKET) {
-			if (data.size() < sizeof(PacketEditorMessage)) {
-				DEBUGLOG(L"[TCP] Received data too small to be PacketEditorMessage (got " +
+			if (data.size() < sizeof(PacketInjectionRequest)) {
+				DEBUGLOG(L"[TCP] Received data too small to be PacketInjectionRequest (got " +
 					std::to_wstring(data.size()) + L" bytes, need at least " +
-					std::to_wstring(sizeof(PacketEditorMessage)) + L" bytes)");
+					std::to_wstring(sizeof(PacketInjectionRequest)) + L" bytes)");
 				continue;
 			}
 
-			PacketEditorMessage* pcm = (PacketEditorMessage*)&data[0];
-			DEBUGLOG(L"[TCP] Packet injection request: " +
-				std::wstring(pcm->header == SENDPACKET ? L"SENDPACKET" : L"RECVPACKET"));
+			// Parse injection request (queue_name + PacketEditorMessage)
+			PacketInjectionRequest* req = (PacketInjectionRequest*)&data[0];
+			PacketEditorMessage* pcm = &req->packet_message;
 
-				// Extract queue name from message
-				std::string queue_name(pcm->Binary.queue_name, strnlen(pcm->Binary.queue_name, MAX_QUEUE_NAME_LENGTH));
-				std::wstring queue_name_w(queue_name.begin(), queue_name.end());
+			// Extract queue name
+			std::string queue_name(req->queue_name, strnlen(req->queue_name, MAX_QUEUE_NAME_LENGTH));
+			std::wstring queue_name_w(queue_name.begin(), queue_name.end());
+
+			DEBUGLOG(L"[TCP] Packet injection request: " +
+				std::wstring(pcm->header == SENDPACKET ? L"SENDPACKET" : L"RECVPACKET") +
+				L" for queue '" + queue_name_w + L"'");
 
 				// Log first few bytes of packet (offset by queue_name field)
 				std::wstring packet_preview = L"[TCP] Queue='" + queue_name_w + L"', Packet data (first 16 bytes): ";
@@ -211,8 +215,12 @@ bool TCPCommunicate(TCPServerThread &client) {
 					incomplete.start_time_ms = GetTickCount();
 				}
 
-				// Add packet to incomplete group
-				incomplete.packets.push_back(data);
+				// Add packet to incomplete group (only the PacketEditorMessage part, not queue_name)
+				std::vector<BYTE> packet_data(
+					data.begin() + MAX_QUEUE_NAME_LENGTH,  // Skip queue_name
+					data.end()
+				);
+				incomplete.packets.push_back(packet_data);
 
 				DEBUGLOG(L"[TCP] Added packet " + std::to_wstring(incomplete.packets.size()) +
 					L"/" + std::to_wstring(expected_packet_count) + L" to queue '" + queue_name_w + L"'");

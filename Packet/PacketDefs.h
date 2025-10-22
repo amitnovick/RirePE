@@ -75,7 +75,6 @@ typedef struct {
 	union {
 		// SEND or RECV
 		struct {
-			char queue_name[MAX_QUEUE_NAME_LENGTH];  // Target queue name
 			DWORD length;     // packet size
 			BYTE packet[1];   // packet data
 		} Binary;
@@ -90,6 +89,13 @@ typedef struct {
 		DWORD status;         // status
 	};
 } PacketEditorMessage;
+
+// Packet injection request (client → DLL)
+// Sent before PacketEditorMessage to specify target queue
+typedef struct {
+	char queue_name[MAX_QUEUE_NAME_LENGTH];  // Target queue name
+	PacketEditorMessage packet_message;       // The packet to inject
+} PacketInjectionRequest;
 
 // Timestamp configuration for a single packet type
 typedef struct {
