@@ -274,13 +274,23 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 		// For multi-packet groups, check if enough time has passed for the NEXT packet
 		bool next_packet_ready = (current_time_ms >= front_group.next_packet_time_ms);
 
-		// Must satisfy all conditions:
-		// 1. Time since queued >= injection_interval (for inter-group delay)
-		// 2. Time since last >= injection_interval (prevents back-to-back groups)
-		// 3. Next packet ready (for intra-group per-packet delay)
-		if (time_since_queued >= config.injection_interval_ms &&
-			time_since_last >= config.injection_interval_ms &&
-			next_packet_ready) {
+		// Different conditions based on whether this is the first packet or a subsequent packet
+		bool is_first_packet = (front_group.current_packet_index == 0);
+
+		bool ready = false;
+		if (is_first_packet) {
+			// First packet: must satisfy inter-group delay (from last packet of previous group)
+			// AND the first packet's own delay (packet_intervals_ms[0])
+			// Note: time_since_queued handles the delay from when group arrived
+			// time_since_last handles the delay from last injection (inter-group delay)
+			ready = (time_since_last >= config.injection_interval_ms && next_packet_ready);
+		} else {
+			// Subsequent packets: only check per-packet timing
+			// No inter-group delay, just the intra-group per-packet delay
+			ready = next_packet_ready;
+		}
+
+		if (ready) {
 			ready_queue_names.push_back(queue_name);
 			// Always log for DIRECT queue, otherwise only every 25 ticks
 			if (queue_name == "DIRECT" || call_count % 25 == 1) {
@@ -393,7 +403,7 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 		} else {
 			// Group is complete, update last injection time for inter-group delay
 			EnterCriticalSection(&injection_queue_cs);
-			queue_configs[queue_name].last_injection_time_ms = current_time_ms;
+			queue_configs[queue_name].last_injection_time_ms = new_timestamp;
 			LeaveCriticalSection(&injection_queue_cs);
 		}
 	}
