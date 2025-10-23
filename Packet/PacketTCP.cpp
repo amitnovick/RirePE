@@ -250,6 +250,8 @@ bool TCPCommunicate(TCPServerThread &client) {
 					MultiPacketGroup group;
 					group.packets = incomplete.packets;
 					group.queued_time_ms = incomplete.start_time_ms;
+					group.current_packet_index = 0;  // Start at first packet
+					group.next_packet_time_ms = incomplete.start_time_ms;  // Can inject first packet immediately
 
 					// Add to packet queue
 					packet_queues[queue_name].push(group);

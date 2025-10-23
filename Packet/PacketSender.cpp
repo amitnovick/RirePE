@@ -26,12 +26,15 @@ struct QueueConfig {
 	DWORD last_injection_time_ms;
 	BYTE packet_count;                       // Number of packets expected in each group
 	std::vector<TimestampConfig> timestamp_configs;  // Timestamp config for each packet
+	std::vector<DWORD> packet_intervals_ms;  // Delay BEFORE injecting each packet (in ms)
 };
 
 // Multi-packet group waiting to be injected
 struct MultiPacketGroup {
 	std::vector<std::vector<BYTE>> packets;  // Multiple packets to inject together
 	DWORD queued_time_ms;
+	BYTE current_packet_index;               // Index of next packet to inject (0-based)
+	DWORD next_packet_time_ms;               // When the next packet should be injected
 };
 
 // Map from queue name to queue configuration
@@ -72,7 +75,7 @@ bool RegisterQueue(const QueueConfigMessage& config) {
 	// Initialize to current time so first injection waits for the full interval
 	qc.last_injection_time_ms = GetCurrentTimeMs();
 
-	// Copy timestamp configs
+	// Copy timestamp configs and packet intervals
 	for (BYTE i = 0; i < config.packet_count && i < MAX_PACKETS_PER_QUEUE; i++) {
 		TimestampConfig tc;
 		tc.needs_update = config.timestamp_configs[i].needs_timestamp_update != 0;
@@ -80,6 +83,7 @@ bool RegisterQueue(const QueueConfigMessage& config) {
 			tc.offsets.push_back(config.timestamp_configs[i].timestamp_offsets[j]);
 		}
 		qc.timestamp_configs.push_back(tc);
+		qc.packet_intervals_ms.push_back(config.packet_intervals_ms[i]);
 	}
 
 	// Register the queue
@@ -101,7 +105,8 @@ bool RegisterQueue(const QueueConfigMessage& config) {
 	for (size_t i = 0; i < qc.timestamp_configs.size(); i++) {
 		DEBUGLOG(L"[QUEUE]   Packet " + std::to_wstring(i + 1) +
 			L": needs_timestamp=" + std::to_wstring(qc.timestamp_configs[i].needs_update) +
-			L", timestamp_offsets=" + std::to_wstring(qc.timestamp_configs[i].offsets.size()));
+			L", timestamp_offsets=" + std::to_wstring(qc.timestamp_configs[i].offsets.size()) +
+			L", delay=" + std::to_wstring(qc.packet_intervals_ms[i]) + L"ms");
 	}
 
 	return true;
@@ -266,9 +271,16 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 		// Check if enough time has passed since last injection
 		DWORD time_since_last = current_time_ms - config.last_injection_time_ms;
 
-		// Must satisfy BOTH conditions: time since queued AND time since last injection
+		// For multi-packet groups, check if enough time has passed for the NEXT packet
+		bool next_packet_ready = (current_time_ms >= front_group.next_packet_time_ms);
+
+		// Must satisfy all conditions:
+		// 1. Time since queued >= injection_interval (for inter-group delay)
+		// 2. Time since last >= injection_interval (prevents back-to-back groups)
+		// 3. Next packet ready (for intra-group per-packet delay)
 		if (time_since_queued >= config.injection_interval_ms &&
-			time_since_last >= config.injection_interval_ms) {
+			time_since_last >= config.injection_interval_ms &&
+			next_packet_ready) {
 			ready_queue_names.push_back(queue_name);
 			// Always log for DIRECT queue, otherwise only every 25 ticks
 			if (queue_name == "DIRECT" || call_count % 25 == 1) {
@@ -324,15 +336,14 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 		MultiPacketGroup group = std::get<2>(tuple);
 		size_t remaining = std::get<3>(tuple);
 
-		// Update timestamps for all packets in the group
-		for (size_t i = 0; i < group.packets.size(); i++) {
-			if (i >= config.timestamp_configs.size()) {
-				break;
-			}
+		// Get the current packet index to inject
+		BYTE packet_idx = group.current_packet_index;
 
-			TimestampConfig& ts_config = config.timestamp_configs[i];
+		// Update timestamp for the current packet only
+		if (packet_idx < config.timestamp_configs.size()) {
+			TimestampConfig& ts_config = config.timestamp_configs[packet_idx];
 			if (ts_config.needs_update) {
-				PacketEditorMessage *pcm = (PacketEditorMessage *)&group.packets[i][0];
+				PacketEditorMessage *pcm = (PacketEditorMessage *)&group.packets[packet_idx][0];
 				if (pcm->header == SENDPACKET) {
 					// Update all configured timestamp offsets
 					for (DWORD offset : ts_config.offsets) {
@@ -347,20 +358,44 @@ VOID CALLBACK PacketInjector(HWND, UINT, UINT_PTR, DWORD) {
 		// Log injection (always log for DIRECT queue, otherwise only every 25 ticks)
 		if (queue_name == "DIRECT" || call_count % 25 == 1) {
 			std::wstring qname_w(queue_name.begin(), queue_name.end());
-			DEBUGLOG(L"[INJECT-DO] Injecting " + std::to_wstring(group.packets.size()) +
-				L" packet(s) from '" + qname_w + L"' (remaining=" +
+			DEBUGLOG(L"[INJECT-DO] Injecting packet " + std::to_wstring(packet_idx + 1) +
+				L"/" + std::to_wstring(group.packets.size()) +
+				L" from '" + qname_w + L"' (remaining=" +
 				std::to_wstring(remaining) + L" groups)");
 		}
 
-		// Inject all packets in the group in order
-		for (size_t i = 0; i < group.packets.size(); i++) {
-			InjectSinglePacket(group.packets[i]);
-		}
+		// Inject the current packet
+		InjectSinglePacket(group.packets[packet_idx]);
 
-		// Update last injection time
-		EnterCriticalSection(&injection_queue_cs);
-		queue_configs[queue_name].last_injection_time_ms = current_time_ms;
-		LeaveCriticalSection(&injection_queue_cs);
+		// Move to next packet
+		group.current_packet_index++;
+
+		// Check if there are more packets in this group
+		if (group.current_packet_index < group.packets.size()) {
+			// Calculate when the next packet should be injected
+			DWORD next_packet_interval = 0;
+			if (group.current_packet_index < config.packet_intervals_ms.size()) {
+				next_packet_interval = config.packet_intervals_ms[group.current_packet_index];
+			}
+			group.next_packet_time_ms = new_timestamp + next_packet_interval;
+
+			// Re-queue the group for the next packet
+			EnterCriticalSection(&injection_queue_cs);
+			packet_queues[queue_name].push(group);
+			LeaveCriticalSection(&injection_queue_cs);
+
+			if (queue_name == "DIRECT" || call_count % 25 == 1) {
+				std::wstring qname_w(queue_name.begin(), queue_name.end());
+				DEBUGLOG(L"[INJECT-REQUEUE] Re-queued '" + qname_w +
+					L"' for packet " + std::to_wstring(group.current_packet_index + 1) +
+					L" in " + std::to_wstring(next_packet_interval) + L"ms");
+			}
+		} else {
+			// Group is complete, update last injection time for inter-group delay
+			EnterCriticalSection(&injection_queue_cs);
+			queue_configs[queue_name].last_injection_time_ms = current_time_ms;
+			LeaveCriticalSection(&injection_queue_cs);
+		}
 	}
 }
 

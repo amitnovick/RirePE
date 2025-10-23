@@ -112,6 +112,7 @@ typedef struct {
 	BYTE packet_count;                        // Number of packets in this queue (1-8)
 	BYTE padding[3];                          // Padding for alignment
 	PacketTimestampConfig timestamp_configs[MAX_PACKETS_PER_QUEUE];  // Timestamp config for each packet
+	DWORD packet_intervals_ms[MAX_PACKETS_PER_QUEUE];  // Delay BEFORE injecting each packet in the group (in ms)
 } QueueConfigMessage;
 
 #pragma pack(pop)
