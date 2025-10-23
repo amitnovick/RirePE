@@ -28,6 +28,8 @@ extern void InitTracking();
 struct MultiPacketGroup {
 	std::vector<std::vector<BYTE>> packets;
 	DWORD queued_time_ms;
+	BYTE current_packet_index;               // Index of next packet to inject (0-based)
+	DWORD next_packet_time_ms;               // When the next packet should be injected
 };
 
 // External references to packet injection infrastructure (from PacketSender.cpp)
